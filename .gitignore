@@ -9,14 +9,25 @@ __pycache__/
 venv/
 .env
 
-# Data
+# Data contents only
 data/raw/*
 data/interim/*
 data/processed/*
-artifacts/*
-*.csv
-*.parquet
-*.npy
+data/eval/*
+!data/raw/.gitkeep
+!data/interim/.gitkeep
+!data/processed/.gitkeep
+!data/eval/.gitkeep
+
+# Artifacts contents only
+artifacts/models/*
+artifacts/embeddings/*
+artifacts/indexes/*
+artifacts/reports/*
+!artifacts/models/.gitkeep
+!artifacts/embeddings/.gitkeep
+!artifacts/indexes/.gitkeep
+!artifacts/reports/.gitkeep
 
 # Jupyter
 .ipynb_checkpoints/

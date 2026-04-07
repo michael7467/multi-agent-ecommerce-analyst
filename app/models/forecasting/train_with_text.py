@@ -2,15 +2,19 @@ from __future__ import annotations
 
 from pathlib import Path
 import joblib
-
 import pandas as pd
+
+from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import classification_report, accuracy_score, confusion_matrix
+from sklearn.impute import SimpleImputer
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import LabelEncoder
+from sklearn.feature_extraction.text import TfidfVectorizer
 
 
-FEATURE_COLUMNS = [
+NUMERIC_FEATURES = [
     "review_count",
     "avg_rating",
     "rating_std",
@@ -19,10 +23,15 @@ FEATURE_COLUMNS = [
     "review_time_span",
 ]
 
+TEXT_FEATURES = [
+    "title",
+    "categories",
+]
+
 TARGET_COLUMN = "price_class"
 
 
-class ForecastTrainer:
+class TextForecastTrainer:
     def __init__(self, df: pd.DataFrame) -> None:
         self.df = df.copy()
         self.label_encoder = LabelEncoder()
@@ -30,14 +39,18 @@ class ForecastTrainer:
     def prepare_data(self):
         df = self.df.copy()
 
-        # Keep only needed columns
-        needed_cols = FEATURE_COLUMNS + [TARGET_COLUMN]
+        needed_cols = NUMERIC_FEATURES + TEXT_FEATURES + [TARGET_COLUMN]
         df = df[needed_cols].copy()
 
-        # Drop missing rows
-        df = df.dropna()
+        for col in TEXT_FEATURES:
+            df[col] = df[col].fillna("").astype(str)
 
-        X = df[FEATURE_COLUMNS]
+        for col in NUMERIC_FEATURES:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+
+        df = df.dropna(subset=[TARGET_COLUMN])
+
+        X = df[NUMERIC_FEATURES + TEXT_FEATURES]
         y = self.label_encoder.fit_transform(df[TARGET_COLUMN])
 
         return train_test_split(
@@ -48,20 +61,44 @@ class ForecastTrainer:
             stratify=y,
         )
 
-    def train(self):
-        X_train, X_test, y_train, y_test = self.prepare_data()
+    def build_pipeline(self) -> Pipeline:
+        numeric_transformer = Pipeline(
+            steps=[
+                ("imputer", SimpleImputer(strategy="median")),
+            ]
+        )
+
+        preprocessor = ColumnTransformer(
+            transformers=[
+                ("num", numeric_transformer, NUMERIC_FEATURES),
+                ("title_tfidf", TfidfVectorizer(max_features=3000, ngram_range=(1, 2)), "title"),
+                ("cat_tfidf", TfidfVectorizer(max_features=2000, ngram_range=(1, 2)), "categories"),
+            ],
+            remainder="drop",
+        )
 
         model = RandomForestClassifier(
             n_estimators=200,
-            max_depth=None,
             random_state=42,
             n_jobs=-1,
             class_weight="balanced",
         )
 
-        model.fit(X_train, y_train)
+        pipeline = Pipeline(
+            steps=[
+                ("preprocessor", preprocessor),
+                ("model", model),
+            ]
+        )
 
-        y_pred = model.predict(X_test)
+        return pipeline
+
+    def train(self):
+        X_train, X_test, y_train, y_test = self.prepare_data()
+        pipeline = self.build_pipeline()
+
+        pipeline.fit(X_train, y_train)
+        y_pred = pipeline.predict(X_test)
 
         metrics = {
             "accuracy": accuracy_score(y_test, y_pred),
@@ -74,22 +111,22 @@ class ForecastTrainer:
             "confusion_matrix": confusion_matrix(y_test, y_pred),
         }
 
-        return model, metrics, X_test, y_test, y_pred
+        return pipeline, metrics
 
 
 def save_model_artifacts(
     input_path: str = "data/processed/electronics_labeled.csv",
-    model_output_path: str = "artifacts/models/price_class_model.joblib",
-    encoder_output_path: str = "artifacts/models/price_class_label_encoder.joblib",
+    model_output_path: str = "artifacts/models/price_class_model_with_text.joblib",
+    encoder_output_path: str = "artifacts/models/price_class_label_encoder_with_text.joblib",
 ) -> None:
     df = pd.read_csv(input_path)
 
-    trainer = ForecastTrainer(df)
-    model, metrics, X_test, y_test, y_pred = trainer.train()
+    trainer = TextForecastTrainer(df)
+    pipeline, metrics = trainer.train()
 
     Path(model_output_path).parent.mkdir(parents=True, exist_ok=True)
 
-    joblib.dump(model, model_output_path)
+    joblib.dump(pipeline, model_output_path)
     joblib.dump(trainer.label_encoder, encoder_output_path)
 
     print(f"Saved model to: {model_output_path}")
@@ -103,14 +140,6 @@ def save_model_artifacts(
 
     print("\nConfusion Matrix:")
     print(metrics["confusion_matrix"])
-
-    feature_importance = pd.DataFrame({
-        "feature": FEATURE_COLUMNS,
-        "importance": model.feature_importances_,
-    }).sort_values(by="importance", ascending=False)
-
-    print("\nFeature Importances:")
-    print(feature_importance)
 
 
 if __name__ == "__main__":

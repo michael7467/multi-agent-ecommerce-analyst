@@ -68,6 +68,22 @@ Main insight:
 - Semantic text features dramatically improved performance
 - This motivates the next phase: retrieval and explanation with RAG
 
+## Phase 3A: RAG Retrieval Pipeline ✅
+
+Completed:
+- Built review document corpus for retrieval
+- Generated sentence embeddings using MiniLM
+- Created FAISS vector index
+- Implemented global semantic retrieval
+- Implemented product-specific semantic retrieval
+- Built RAG service for structured evidence extraction
+- Integrated ML prediction + RAG evidence in analysis service
+
+Current analyst output:
+- product metadata
+- predicted price class
+- retrieved supporting review evidence
+
 Saved artifacts:
 - `artifacts/models/price_class_model.joblib`
 - `artifacts/models/price_class_label_encoder.joblib`

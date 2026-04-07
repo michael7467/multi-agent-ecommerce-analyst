@@ -21,8 +21,16 @@ A multi-agent AI system that predicts product price movement and explains predic
 - FAISS / Chroma
 - LLM API
 
-## Project Structure
-(brief summary)
+## Phase 1: Data Pipeline ✅
 
-## How to Run
-(you will fill later)
+Completed:
+- Downloaded and sampled Amazon Reviews 2023 (Electronics)
+- Built data loaders for reviews and metadata
+- Cleaned and normalized datasets
+- Merged reviews with product metadata
+- Built product-level feature table
+
+Final dataset:
+- ~50K reviews
+- ~34K products
+- Product-level features for ML modeling

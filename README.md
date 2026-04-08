@@ -90,6 +90,19 @@ Saved artifacts:
 - `artifacts/models/price_class_model_with_text.joblib`
 - `artifacts/models/price_class_label_encoder_with_text.joblib`
 
+## Evaluation Layer
+
+Implemented:
+- Agent pipeline evaluation
+- Retrieval quality checks
+- Report alignment checks
+
+Evaluation scripts:
+- `python -m app.evaluation.agent_eval`
+- `python -m app.evaluation.rag_eval`
+- `python -m app.evaluation.report_eval`
+- `python -m app.evaluation.run_all_eval`
+
 ## Current Status
 ✅ Phase 1 complete  
 ✅ Phase 2 complete  

@@ -15,6 +15,14 @@ class ReportService:
         predicted_class = analysis_result["predicted_class"]
         evidence = analysis_result["evidence"]
 
+        # ✅ Sentiment extraction
+        sentiment = analysis_result.get("sentiment", {})
+        avg_sentiment_score = sentiment.get("avg_sentiment_score", 0.0)
+        positive_review_ratio = sentiment.get("positive_review_ratio", 0.0)
+        neutral_review_ratio = sentiment.get("neutral_review_ratio", 0.0)
+        negative_review_ratio = sentiment.get("negative_review_ratio", 0.0)
+
+        # Build evidence text
         evidence_text = []
         for i, ev in enumerate(evidence, start=1):
             evidence_text.append(
@@ -26,46 +34,59 @@ Similarity score: {ev.get("score", 0):.4f}
             )
 
         joined_evidence = "\n".join(evidence_text)
+
+        # ✅ Updated prompt with sentiment
         prompt = f"""
-        You are an e-commerce AI analyst.
+You are an expert e-commerce AI analyst.
 
-        Your task is to explain a price-class prediction using only the provided evidence.
+Your task is to explain a price-class prediction using structured data, sentiment signals, and retrieved review evidence.
 
-        Strict rules:
-        - The predicted price class is fixed and must not be changed.
-        - Do not reinterpret, rename, or override the predicted class.
-        - If the evidence is mixed, say the evidence is mixed, but keep the predicted class unchanged.
-        - Use only the provided evidence.
-        - Do not invent facts.
-        - Output plain text only.
+Strict rules:
+- The predicted price class is fixed and must not be changed.
+- Do not reinterpret, rename, or override the predicted class.
+- If the evidence is mixed, explicitly say so, but keep the predicted class unchanged.
+- Use only the provided evidence and sentiment summary.
+- Do not invent facts.
+- Output plain text only.
 
-        Product ID: {product_id}
-        Title: {title}
-        Categories: {categories}
-        Price: {price}
-        Predicted price class: {predicted_class}
+Product Information:
+- Product ID: {product_id}
+- Title: {title}
+- Categories: {categories}
+- Price: {price}
+- Predicted price class: {predicted_class}
 
-        Retrieved evidence:
-        {joined_evidence}
+Sentiment Summary:
+- Average sentiment score: {avg_sentiment_score:.3f}
+- Positive reviews: {positive_review_ratio:.2%}
+- Neutral reviews: {neutral_review_ratio:.2%}
+- Negative reviews: {negative_review_ratio:.2%}
 
-        Write a short analyst report with:
-        1. A one-sentence summary that explicitly states the predicted class as {predicted_class}
-        2. A brief explanation of why this prediction may make sense
-        3. 2-3 bullet points grounded in the retrieved review evidence
-        """
-    
+Retrieved Evidence:
+{joined_evidence}
+
+Write a professional analyst report with:
+1. A one-sentence summary clearly stating the predicted class as {predicted_class}
+2. A short explanation combining product features and sentiment trends
+3. 2–3 bullet points grounded in retrieved review evidence
+4. A brief mention of overall customer perception using sentiment statistics
+"""
+
         return prompt.strip()
 
     def generate_report(self, analysis_result: dict) -> str:
         prompt = self._build_prompt(analysis_result)
         report = self.llm.generate_text(prompt)
 
+        # ✅ Guardrail: enforce predicted class presence
         predicted_class = str(analysis_result["predicted_class"]).lower()
+
         if predicted_class not in report.lower():
             return (
                 f"Predicted price class: {analysis_result['predicted_class']}\n\n"
-                f"The model predicts this class based on product text features and retrieved review evidence, "
-                f"but the generated explanation was not fully aligned and was replaced by this safe summary."
+                f"The model predicts this class based on product features, sentiment signals, "
+                f"and retrieved review evidence. However, the generated explanation was not fully aligned, "
+                f"so this safe summary is returned instead."
             )
 
         return report

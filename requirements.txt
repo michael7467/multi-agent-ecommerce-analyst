@@ -6,3 +6,5 @@ faiss-cpu
 joblib
 sentence-transformers
 torch
+streamlit
+nltk

@@ -3,7 +3,7 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
-from app.agents.orchestrator import Orchestrator
+from app.agents.dynamic_orchestrator import DynamicOrchestrator
 
 
 st.set_page_config(
@@ -14,8 +14,8 @@ st.set_page_config(
 
 
 @st.cache_resource
-def load_orchestrator() -> Orchestrator:
-    return Orchestrator()
+def load_orchestrator() -> DynamicOrchestrator:
+    return DynamicOrchestrator()
 
 
 def render_header() -> None:
@@ -24,17 +24,25 @@ def render_header() -> None:
         """
         Analyze an e-commerce product using:
 
+        - **Planning Agent** for dynamic query-aware routing  
         - **Forecast Agent** for price-class prediction  
         - **Sentiment Agent** for customer perception analysis  
         - **Retrieval Agent** for review-based evidence  
-        - **Report Agent** for LLM-generated explanation  
-        - **Guardrail Agent** for consistency checking
+        - **Summarization Agent** for aspect-based summaries  
+        - **Recommender Agent** for similar products  
+        - **Image Retrieval Agent** for visually similar products  
+        - **Report Agent** for LLM-generated explanations  
+        - **Guardrail Agent** for consistency checks  
+        - **Critic Agent** for evaluation and critique  
         """
     )
 
 
 def render_sidebar() -> tuple[str, str, int, bool]:
     st.sidebar.header("Analysis Settings")
+    st.sidebar.info(
+        "This app uses an LLM-based planner to decide which agents to run for your query."
+    )
 
     product_id = st.sidebar.text_input(
         "Product ID",
@@ -45,7 +53,7 @@ def render_sidebar() -> tuple[str, str, int, bool]:
     query = st.sidebar.text_area(
         "Analysis Query",
         value="sound quality and noise cancellation",
-        help="Describe what kind of evidence you want the system to retrieve.",
+        help="Ask about sentiment, value, complaints, similar products, or visual alternatives.",
         height=100,
     )
 
@@ -62,19 +70,44 @@ def render_sidebar() -> tuple[str, str, int, bool]:
     return product_id, query, top_k, show_raw_output
 
 
+def render_execution_plan(result: dict) -> None:
+    st.subheader("Execution Plan")
+
+    plan = result.get("plan", {})
+    if not plan:
+        st.info("No execution plan available.")
+        return
+
+    active_agents = [name for name, enabled in plan.items() if enabled]
+
+    st.write("**Planner selected these capabilities:**")
+    for agent in active_agents:
+        st.write(f"- {agent}")
+
+
 def render_prediction_card(output: dict) -> None:
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        st.metric("Predicted Class", str(output.get("predicted_class", "")).upper())
+        predicted_class = output.get("predicted_class")
+        st.metric(
+            "Predicted Class",
+            str(predicted_class).upper() if predicted_class is not None else "N/A",
+        )
 
     with col2:
         price = output.get("price")
-        st.metric("Product Price", f"${price:.2f}" if isinstance(price, (int, float)) else "N/A")
+        st.metric(
+            "Product Price",
+            f"${price:.2f}" if isinstance(price, (int, float)) else "N/A",
+        )
 
     with col3:
-        guardrail_status = output.get("guardrail_status", "unknown")
-        st.metric("Guardrail Status", guardrail_status.upper())
+        guardrail_status = output.get("guardrail_status")
+        st.metric(
+            "Guardrail Status",
+            str(guardrail_status).upper() if guardrail_status is not None else "N/A",
+        )
 
 
 def render_product_info(output: dict) -> None:
@@ -82,6 +115,20 @@ def render_product_info(output: dict) -> None:
     st.write(f"**Product ID:** {output.get('product_id', '')}")
     st.write(f"**Title:** {output.get('title', '')}")
     st.write(f"**Categories:** {output.get('categories', '')}")
+
+
+def render_memory(output: dict) -> None:
+    st.subheader("Stored Product Memory")
+
+    memory = output.get("memory")
+    if not memory:
+        st.info("No past memory for this product yet.")
+        return
+
+    st.write(f"**Last Predicted Class:** {memory.get('last_predicted_class')}")
+    st.write(f"**Average Sentiment:** {memory.get('avg_sentiment')}")
+    st.write("**Last Report:**")
+    st.write(memory.get("last_report"))
 
 
 def render_sentiment(output: dict) -> None:
@@ -97,13 +144,10 @@ def render_sentiment(output: dict) -> None:
 
     with col1:
         st.metric("Avg Sentiment", f"{avg_score:.3f}")
-
     with col2:
         st.metric("Positive", f"{pos:.1%}")
-
     with col3:
         st.metric("Neutral", f"{neu:.1%}")
-
     with col4:
         st.metric("Negative", f"{neg:.1%}")
 
@@ -119,7 +163,50 @@ def render_sentiment(output: dict) -> None:
 
 def render_report(output: dict) -> None:
     st.subheader("LLM Explanation")
-    st.write(output.get("report", ""))
+    report = output.get("report", "")
+    if report:
+        st.write(report)
+    else:
+        st.info("No report available.")
+
+
+def render_critic_report(output: dict) -> None:
+    st.subheader("Critic Agent Evaluation")
+
+    critic_report = output.get("critic_report", "")
+    if not critic_report:
+        st.info("No critic evaluation available.")
+        return
+
+    st.text(critic_report)
+
+
+def render_aspect_summaries(output: dict) -> None:
+    st.subheader("Aspect-Based Review Summaries")
+
+    aspect_summaries = output.get("aspect_summaries", {})
+    if not aspect_summaries:
+        st.info("No aspect summaries available.")
+        return
+
+    aspect_labels = {
+        "sound_quality": "Sound Quality",
+        "battery_life": "Battery Life",
+        "comfort": "Comfort",
+        "build_quality": "Build Quality",
+        "durability": "Durability",
+        "price_value": "Price / Value",
+    }
+
+    for aspect, payload in aspect_summaries.items():
+        label = aspect_labels.get(aspect, aspect)
+        summary = payload.get("summary", "").strip()
+
+        with st.expander(label):
+            if summary:
+                st.write(summary)
+            else:
+                st.write("No summary available.")
 
 
 def render_evidence(output: dict) -> None:
@@ -142,54 +229,6 @@ def render_evidence(output: dict) -> None:
             st.write(ev.get("review_text", ""))
 
 
-def render_raw_output(output: dict) -> None:
-    st.subheader("Raw Output")
-    st.json(output)
-
-
-def main() -> None:
-    render_header()
-
-    product_id, query, top_k, show_raw_output = render_sidebar()
-
-    st.markdown("---")
-
-    if st.button("Analyze Product", type="primary"):
-        try:
-            orchestrator = load_orchestrator()
-
-            with st.spinner("Running multi-agent analysis..."):
-                result = orchestrator.run(
-                    product_id=product_id,
-                    query=query,
-                    top_k=top_k,
-                )
-
-            output = result["final_output"]
-
-            render_prediction_card(output)
-            st.markdown("---")
-            render_product_info(output)
-            st.markdown("---")
-            render_sentiment(output)
-            st.markdown("---")
-            render_report(output)
-            st.markdown("---")
-            render_critic_report(output)
-            st.markdown("---")
-            render_aspect_summaries(output)
-            st.markdown("---")
-            render_evidence(output)
-            st.markdown("---")
-            render_recommendations(output)
-            st.markdown("---")
-            render_image_similar_products(output)
-            if show_raw_output:
-                st.markdown("---")
-                render_raw_output(output)
-
-        except Exception as e:
-            st.error(f"Analysis failed: {e}")
 def render_recommendations(output: dict) -> None:
     st.subheader("Similar Product Recommendations")
 
@@ -199,34 +238,21 @@ def render_recommendations(output: dict) -> None:
         return
 
     for i, item in enumerate(recommendations, start=1):
-        with st.expander(f"Recommendation {i} — Similarity: {item['similarity_score']:.4f}"):
+        score = float(item.get("similarity_score", 0.0))
+        with st.expander(f"Recommendation {i} — Similarity: {score:.4f}"):
             st.write(f"**Product ID:** {item.get('product_id', '')}")
             st.write(f"**Title:** {item.get('title', '')}")
             st.write(f"**Categories:** {item.get('categories', '')}")
-            price = item.get("price", None)
-            st.write(f"**Price:** ${price:.2f}" if isinstance(price, (int, float)) else "**Price:** N/A")
-            st.write(f"**Predicted Class:** {str(item.get('predicted_class', '')).upper()}")
-def render_aspect_summaries(output: dict) -> None:
-    st.subheader("Aspect-Based Review Summaries")
+            price = item.get("price")
+            st.write(
+                f"**Price:** ${price:.2f}"
+                if isinstance(price, (int, float))
+                else "**Price:** N/A"
+            )
+            st.write(
+                f"**Predicted Class:** {str(item.get('predicted_class', '')).upper()}"
+            )
 
-    aspect_summaries = output.get("aspect_summaries", {})
-    if not aspect_summaries:
-        st.info("No aspect summaries available.")
-        return
-
-    aspect_labels = {
-        "sound_quality": "Sound Quality",
-        "battery_life": "Battery Life",
-        "comfort": "Comfort",
-        "build_quality": "Build Quality",
-        "durability": "Durability",
-        "price_value": "Price / Value",
-    }
-
-    for aspect, payload in aspect_summaries.items():
-        label = aspect_labels.get(aspect, aspect)
-        with st.expander(label):
-            st.write(payload.get("summary", ""))
 
 def render_image_similar_products(output: dict) -> None:
     st.subheader("Visually Similar Products")
@@ -237,21 +263,165 @@ def render_image_similar_products(output: dict) -> None:
         return
 
     for i, item in enumerate(items, start=1):
-        with st.expander(f"Visual Match {i} — Similarity: {item['similarity_score']:.4f}"):
+        score = float(item.get("similarity_score", 0.0))
+        with st.expander(f"Visual Match {i} — Similarity: {score:.4f}"):
             st.write(f"**Product ID:** {item.get('product_id', '')}")
             st.write(f"**Title:** {item.get('title', '')}")
             st.write(f"**Image URL:** {item.get('image_url', '')}")
             st.write(f"**Image Path:** {item.get('image_path', '')}")
 
-def render_critic_report(output: dict) -> None:
-    st.subheader("Critic Agent Evaluation")
-    critic_report = output.get("critic_report", "")
 
-    if not critic_report:
-        st.info("No critic evaluation available.")
+def render_raw_output(output: dict) -> None:
+    st.subheader("Raw Output")
+    st.json(output)
+def render_aspect_sentiment(output: dict) -> None:
+    st.subheader("Aspect-Based Sentiment")
+
+    aspect_sentiment = output.get("aspect_sentiment", {})
+    if not aspect_sentiment:
+        st.info("No aspect sentiment available.")
         return
 
-    st.text(critic_report)
+    for aspect, payload in aspect_sentiment.items():
+        label = aspect.replace("_", " ").title()
+        sentiment_label = payload.get("label", "unknown")
+        score = float(payload.get("score", 0.0))
+        method = payload.get("method", "")
+
+        st.write(
+            f"**{label}**: {sentiment_label.upper()} "
+            f"(score={score:.2f}, method={method})"
+        )
+def render_topics(output: dict) -> None:
+    st.subheader("Top Themes")
+
+    themes = output.get("top_themes", [])
+    if not themes:
+        st.info("No topics available.")
+        return
+
+    for t in themes:
+        st.write(f"**{t['topic_name']}** (count={t['count']})")
+        st.write(t["keywords"])
+
+def render_pain_points(output: dict) -> None:
+    st.subheader("Customer Pain Points")
+
+    points = output.get("pain_points", [])
+    if not points:
+        st.info("No pain points detected.")
+        return
+
+    for p in points:
+        st.write(f"**{p['topic_name']}**")
+        st.write(p["keywords"])
+
+def render_counterfactuals(output: dict) -> None:
+    st.subheader("Counterfactual Explanations")
+
+    counterfactuals = output.get("counterfactuals", [])
+    if not counterfactuals:
+        st.info("No counterfactual explanations available.")
+        return
+
+    for i, cf in enumerate(counterfactuals, start=1):
+        with st.expander(f"Counterfactual {i}"):
+            if cf.get("feature") is None:
+                st.write(cf.get("explanation", "No explanation available."))
+                continue
+
+            st.write(f"**Feature:** {cf.get('feature', '')}")
+            st.write(f"**Original Value:** {cf.get('original_value', '')}")
+            st.write(f"**New Value:** {cf.get('new_value', '')}")
+            st.write(f"**Original Class:** {cf.get('original_class', '')}")
+            st.write(f"**New Class:** {cf.get('new_class', '')}")
+            st.write(f"**Change Type:** {cf.get('change_type', '')}")
+            st.write(f"**Explanation:** {cf.get('explanation', '')}")
+
+def main() -> None:
+    render_header()
+    product_id, query, top_k, show_raw_output = render_sidebar()
+
+    st.markdown("---")
+
+    if st.button("Analyze Product", type="primary"):
+        try:
+            orchestrator = load_orchestrator()
+
+            with st.spinner("Running dynamic multi-agent analysis..."):
+                result = orchestrator.run(
+                    product_id=product_id,
+                    query=query,
+                    top_k=top_k,
+                )
+
+            output = result["final_output"]
+
+            render_execution_plan(result)
+            st.markdown("---")
+
+            if any(key in output for key in ["predicted_class", "price", "guardrail_status"]):
+                render_prediction_card(output)
+                st.markdown("---")
+
+            if any(key in output for key in ["title", "categories", "product_id"]):
+                render_product_info(output)
+                st.markdown("---")
+
+            if "memory" in output:
+                render_memory(output)
+                st.markdown("---")
+
+            if "sentiment" in output:
+                render_sentiment(output)
+                st.markdown("---")
+
+            if "aspect_sentiment" in output:
+                render_aspect_sentiment(output)
+                st.markdown("---")
+
+            if "report" in output:
+                render_report(output)
+                st.markdown("---")
+
+            if "critic_report" in output:
+                render_critic_report(output)
+                st.markdown("---")
+
+            if "aspect_summaries" in output:
+                render_aspect_summaries(output)
+                st.markdown("---")
+
+            if "evidence" in output:
+                render_evidence(output)
+                st.markdown("---")
+
+            if "recommendations" in output:
+                render_recommendations(output)
+                st.markdown("---")
+
+            if "image_similar_products" in output:
+                render_image_similar_products(output)
+
+            if "top_themes" in output:
+                render_topics(output)
+                st.markdown("---")
+
+            if "pain_points" in output:
+                render_pain_points(output)
+                st.markdown("---")
+
+            if "counterfactuals" in output:
+                render_counterfactuals(output)
+                st.markdown("---")
+            if show_raw_output:
+                st.markdown("---")
+                render_raw_output(output)
+
+        except Exception as e:
+            st.error(f"Analysis failed: {e}")
+
+
 
 if __name__ == "__main__":
     main()

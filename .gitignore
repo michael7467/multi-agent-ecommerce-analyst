@@ -4,6 +4,8 @@ __pycache__/
 *.pyo
 *.pyd
 *.sqlite3
+*.npy
+*.csv
 
 # Virtual env
 venv/
@@ -21,6 +23,7 @@ data/eval/*
 
 # Artifacts contents only
 artifacts/models/*
+artifacts/qdrant_storage/*
 artifacts/embeddings/*
 artifacts/indexes/*
 artifacts/reports/*

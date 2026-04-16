@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from app.rag.retriever import ReviewRetriever
+from app.rag.qdrant_retriever import QdrantRetriever
 
 
 class RAGService:
     def __init__(self) -> None:
-        self.retriever = ReviewRetriever()
+        self.retriever = QdrantRetriever()
 
     def get_product_evidence(
         self,
@@ -13,22 +13,22 @@ class RAGService:
         query: str,
         top_k: int = 3,
     ) -> list[dict]:
-        results = self.retriever.search_by_product(
-            product_id=product_id,
+        results = self.retriever.search(
             query=query,
             top_k=top_k,
+            product_id=product_id,
         )
 
         evidence = []
-        for _, row in results.iterrows():
+        for item in results:
             evidence.append(
                 {
-                    "product_id": row["product_id"],
-                    "title": row.get("title", ""),
-                    "review_text": row.get("review_text", ""),
-                    "review_title": row.get("review_title", ""),
-                    "categories": row.get("categories", ""),
-                    "score": float(row["score"]),
+                    "product_id": item.get("product_id", ""),
+                    "title": item.get("title", ""),
+                    "review_text": item.get("review_text", ""),
+                    "review_title": item.get("review_title", ""),
+                    "categories": item.get("categories", ""),
+                    "score": float(item.get("score", 0.0)),
                 }
             )
 

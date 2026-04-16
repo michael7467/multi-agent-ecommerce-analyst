@@ -11,6 +11,4 @@ class ReportAgent(BaseAgent):
 
     def run(self, analysis_result: dict) -> dict:
         report = self.report_service.generate_report(analysis_result)
-        return {
-            "report": report
-        }
+        return {"report": report}

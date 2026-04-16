@@ -12,3 +12,8 @@ requests
 transformers 
 pillow 
 torch
+bertopic 
+umap-learn 
+hdbscan 
+sentence-transformers
+qdrant-client

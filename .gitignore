@@ -23,7 +23,7 @@ data/eval/*
 
 # Artifacts contents only
 artifacts/models/*
-artifacts/qdrant_storage/*
+artifacts/qdrant_storage/
 artifacts/embeddings/*
 artifacts/indexes/*
 artifacts/reports/*

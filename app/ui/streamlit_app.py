@@ -175,11 +175,15 @@ def main() -> None:
             st.markdown("---")
             render_report(output)
             st.markdown("---")
+            render_critic_report(output)
+            st.markdown("---")
             render_aspect_summaries(output)
             st.markdown("---")
             render_evidence(output)
             st.markdown("---")
             render_recommendations(output)
+            st.markdown("---")
+            render_image_similar_products(output)
             if show_raw_output:
                 st.markdown("---")
                 render_raw_output(output)
@@ -223,5 +227,31 @@ def render_aspect_summaries(output: dict) -> None:
         label = aspect_labels.get(aspect, aspect)
         with st.expander(label):
             st.write(payload.get("summary", ""))
+
+def render_image_similar_products(output: dict) -> None:
+    st.subheader("Visually Similar Products")
+
+    items = output.get("image_similar_products", [])
+    if not items:
+        st.info("No visually similar products found.")
+        return
+
+    for i, item in enumerate(items, start=1):
+        with st.expander(f"Visual Match {i} — Similarity: {item['similarity_score']:.4f}"):
+            st.write(f"**Product ID:** {item.get('product_id', '')}")
+            st.write(f"**Title:** {item.get('title', '')}")
+            st.write(f"**Image URL:** {item.get('image_url', '')}")
+            st.write(f"**Image Path:** {item.get('image_path', '')}")
+
+def render_critic_report(output: dict) -> None:
+    st.subheader("Critic Agent Evaluation")
+    critic_report = output.get("critic_report", "")
+
+    if not critic_report:
+        st.info("No critic evaluation available.")
+        return
+
+    st.text(critic_report)
+
 if __name__ == "__main__":
     main()

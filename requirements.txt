@@ -8,3 +8,7 @@ sentence-transformers
 torch
 streamlit
 nltk
+requests
+transformers 
+pillow 
+torch

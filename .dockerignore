@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.git/
+.gitignore
+.streamlit/
+artifacts/
+data/raw/
+data/processed/
+venv/
+.env

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from app.services.cache_service import CacheService
 from app.rag.qdrant_retriever import QdrantRetriever
 
 
 class RAGService:
     def __init__(self) -> None:
         self.retriever = QdrantRetriever()
+        self.cache = CacheService()
 
     def get_product_evidence(
         self,
@@ -13,6 +15,16 @@ class RAGService:
         query: str,
         top_k: int = 3,
     ) -> list[dict]:
+        cache_payload = {
+            "product_id": product_id,
+            "query": query,
+            "top_k": top_k,
+        }
+
+        cached = self.cache.get_json("rag:evidence", cache_payload)
+        if cached is not None:
+            return cached
+
         results = self.retriever.search(
             query=query,
             top_k=top_k,
@@ -31,6 +43,13 @@ class RAGService:
                     "score": float(item.get("score", 0.0)),
                 }
             )
+
+        self.cache.set_json(
+            "rag:evidence",
+            cache_payload,
+            evidence,
+            ttl_seconds=1800,
+        )
 
         return evidence
 

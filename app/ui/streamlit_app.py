@@ -4,7 +4,12 @@ import pandas as pd
 import streamlit as st
 
 from app.agents.dynamic_orchestrator import DynamicOrchestrator
+from app.observability.metrics import setup_metrics
+from app.observability.tracing import setup_tracing
 
+
+setup_tracing()
+setup_metrics(port=8001)
 
 st.set_page_config(
     page_title="Multi-Agent E-commerce AI Analyst",
@@ -53,7 +58,7 @@ def render_sidebar() -> tuple[str, str, int, bool]:
     query = st.sidebar.text_area(
         "Analysis Query",
         value="sound quality and noise cancellation",
-        help="Ask about sentiment, value, complaints, similar products, or visual alternatives.",
+        help="Ask about sentiment, value, complaints, similar products, visual alternatives, themes, or counterfactuals.",
         height=100,
     )
 
@@ -161,8 +166,29 @@ def render_sentiment(output: dict) -> None:
     st.bar_chart(sentiment_df)
 
 
+def render_aspect_sentiment(output: dict) -> None:
+    st.subheader("Aspect-Based Sentiment")
+
+    aspect_sentiment = output.get("aspect_sentiment", {})
+    if not aspect_sentiment:
+        st.info("No aspect sentiment available.")
+        return
+
+    for aspect, payload in aspect_sentiment.items():
+        label = aspect.replace("_", " ").title()
+        sentiment_label = payload.get("label", "unknown")
+        score = float(payload.get("score", 0.0))
+        method = payload.get("method", "")
+
+        st.write(
+            f"**{label}**: {sentiment_label.upper()} "
+            f"(score={score:.2f}, method={method})"
+        )
+
+
 def render_report(output: dict) -> None:
     st.subheader("LLM Explanation")
+
     report = output.get("report", "")
     if report:
         st.write(report)
@@ -219,7 +245,7 @@ def render_evidence(output: dict) -> None:
 
     for i, ev in enumerate(evidence, start=1):
         title = ev.get("review_title", "") or f"Evidence {i}"
-        score = ev.get("score", 0.0)
+        score = float(ev.get("score", 0.0))
 
         with st.expander(f"Evidence {i} — Score: {score:.4f}"):
             st.write(f"**Review Title:** {title}")
@@ -271,27 +297,6 @@ def render_image_similar_products(output: dict) -> None:
             st.write(f"**Image Path:** {item.get('image_path', '')}")
 
 
-def render_raw_output(output: dict) -> None:
-    st.subheader("Raw Output")
-    st.json(output)
-def render_aspect_sentiment(output: dict) -> None:
-    st.subheader("Aspect-Based Sentiment")
-
-    aspect_sentiment = output.get("aspect_sentiment", {})
-    if not aspect_sentiment:
-        st.info("No aspect sentiment available.")
-        return
-
-    for aspect, payload in aspect_sentiment.items():
-        label = aspect.replace("_", " ").title()
-        sentiment_label = payload.get("label", "unknown")
-        score = float(payload.get("score", 0.0))
-        method = payload.get("method", "")
-
-        st.write(
-            f"**{label}**: {sentiment_label.upper()} "
-            f"(score={score:.2f}, method={method})"
-        )
 def render_topics(output: dict) -> None:
     st.subheader("Top Themes")
 
@@ -300,9 +305,10 @@ def render_topics(output: dict) -> None:
         st.info("No topics available.")
         return
 
-    for t in themes:
-        st.write(f"**{t['topic_name']}** (count={t['count']})")
-        st.write(t["keywords"])
+    for theme in themes:
+        st.write(f"**{theme['topic_name']}** (count={theme['count']})")
+        st.write(theme["keywords"])
+
 
 def render_pain_points(output: dict) -> None:
     st.subheader("Customer Pain Points")
@@ -312,9 +318,10 @@ def render_pain_points(output: dict) -> None:
         st.info("No pain points detected.")
         return
 
-    for p in points:
-        st.write(f"**{p['topic_name']}**")
-        st.write(p["keywords"])
+    for point in points:
+        st.write(f"**{point['topic_name']}**")
+        st.write(point["keywords"])
+
 
 def render_counterfactuals(output: dict) -> None:
     st.subheader("Counterfactual Explanations")
@@ -338,6 +345,12 @@ def render_counterfactuals(output: dict) -> None:
             st.write(f"**Change Type:** {cf.get('change_type', '')}")
             st.write(f"**Explanation:** {cf.get('explanation', '')}")
 
+
+def render_raw_output(output: dict) -> None:
+    st.subheader("Raw Output")
+    st.json(output)
+
+
 def main() -> None:
     render_header()
     product_id, query, top_k, show_raw_output = render_sidebar()
@@ -360,7 +373,9 @@ def main() -> None:
             render_execution_plan(result)
             st.markdown("---")
 
-            if any(key in output for key in ["predicted_class", "price", "guardrail_status"]):
+            if any(
+                key in output for key in ["predicted_class", "price", "guardrail_status"]
+            ):
                 render_prediction_card(output)
                 st.markdown("---")
 
@@ -402,6 +417,7 @@ def main() -> None:
 
             if "image_similar_products" in output:
                 render_image_similar_products(output)
+                st.markdown("---")
 
             if "top_themes" in output:
                 render_topics(output)
@@ -414,13 +430,12 @@ def main() -> None:
             if "counterfactuals" in output:
                 render_counterfactuals(output)
                 st.markdown("---")
+
             if show_raw_output:
-                st.markdown("---")
                 render_raw_output(output)
 
         except Exception as e:
             st.error(f"Analysis failed: {e}")
-
 
 
 if __name__ == "__main__":

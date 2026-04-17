@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ecommerce-streamlit
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ecommerce-streamlit
+  template:
+    metadata:
+      labels:
+        app: ecommerce-streamlit
+    spec:
+      containers:
+        - name: streamlit
+          image: multi-agent-ecommerce-analyst-streamlit:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8501
+          env:
+            - name: REDIS_URL
+              value: redis://redis-service:6379/0

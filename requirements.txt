@@ -17,3 +17,9 @@ umap-learn
 hdbscan 
 sentence-transformers
 qdrant-client
+redis
+opentelemetry-api 
+opentelemetry-sdk
+ opentelemetry-exporter-otlp
+ prometheus-client
+ uvicorn

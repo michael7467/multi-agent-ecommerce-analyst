@@ -1,110 +1,103 @@
-🧠 Multi‑Agent E‑Commerce Analyst
-AI‑powered product intelligence platform with multi‑agent orchestration, RAG, sentiment analysis, topic modeling, and real‑time insights.
+# 🧠 Multi-Agent E-Commerce Analyst
 
-A fully production‑ready system built with:
+AI-powered product intelligence platform with multi-agent orchestration, RAG, sentiment analysis, topic modeling, and real-time insights.
 
-FastAPI (backend API)
+A production-ready system that analyzes e-commerce products using LLM-driven agents, retrieves evidence from reviews, generates insights, and produces a final decision report.
 
-Streamlit (UI)
+---
 
-Multi‑Agent Orchestration (Planner, Data, Memory, Report, Critic, Guardrail…)
+## 🚀 Overview
 
-Redis (caching + message bus)
+This platform combines modern AI techniques with scalable backend architecture to deliver deep product intelligence:
 
-Qdrant (vector search for RAG + embeddings)
+- 🔍 Extract insights from product reviews  
+- 💬 Perform sentiment & aspect-level analysis  
+- 🧠 Use Retrieval-Augmented Generation (RAG) for grounded answers  
+- 📊 Generate structured decision reports  
+- ⚙️ Operate through a coordinated multi-agent pipeline  
 
-OpenTelemetry (tracing + metrics)
+---
 
-Docker + Kubernetes (deployment)
+## ✨ Features
 
-GitHub Actions (CI/CD)
+### 🔹 Multi-Agent Architecture
 
-This platform analyzes e‑commerce products using LLM‑driven agents, retrieves evidence from reviews, generates insights, and produces a final decision report.
+A coordinated system of specialized agents:
 
-🚀 Features
-🔹 Multi‑Agent Architecture
-A coordinated set of agents:
+| Agent | Responsibility |
+|------|----------------|
+| PlanningAgent | Builds execution plan |
+| DataAgent | Fetches product data & reviews |
+| SentimentAgent | Global + aspect sentiment analysis |
+| TopicAgent | Extracts themes & pain points |
+| RetrievalAgent | RAG over review embeddings |
+| ImageRetrievalAgent | Multimodal similarity |
+| CounterfactualAgent | Suggests product improvements |
+| ReportAgent | Generates final structured report |
+| GuardrailAgent | Safety & hallucination checks |
+| CriticAgent | Evaluates agent outputs |
 
-PlanningAgent — builds the execution plan
+All agents are orchestrated in a fault-tolerant pipeline.
 
-DataAgent — fetches product data + reviews
+---
 
-SentimentAgent — global + aspect sentiment
+## 🧩 System Architecture
 
-TopicAgent — pain‑point detection + theme extraction
+```mermaid
+flowchart TD
+    UI[Streamlit UI] --> API[FastAPI Multi-Agent System]
 
-RetrievalAgent — RAG over review embeddings
+    API --> Redis[Redis Cache]
+    API --> Qdrant[Qdrant Vector DB]
+    API --> OTEL[OpenTelemetry]
 
-ImageRetrievalAgent — multimodal similarity
+    subgraph Agents
+        Planner[PlanningAgent]
+        Data[DataAgent]
+        Sentiment[SentimentAgent]
+        Topic[TopicAgent]
+        Retrieval[RetrievalAgent]
+        Image[ImageRetrievalAgent]
+        Counter[CounterfactualAgent]
+        Report[ReportAgent]
+        Guard[GuardrailAgent]
+        Critic[CriticAgent]
+    end
 
-CounterfactualAgent — “what would improve this product?”
+    API --> Planner
+    Planner --> Data
+    Data --> Sentiment
+    Sentiment --> Topic
+    Topic --> Retrieval
+    Retrieval --> Image
+    Image --> Counter
+    Counter --> Report
+    Report --> Guard
+    Guard --> Critic
 
-ReportAgent — final structured report
-
-GuardrailAgent — safety + hallucination checks
-
-CriticAgent — evaluates agent outputs
-
-All orchestrated through a robust, fault‑tolerant pipeline.
-
-🧩 System Architecture
-High‑Level Overview
-Code
-                ┌──────────────────────────┐
-                │        Streamlit UI       │
-                └──────────────┬───────────┘
-                               │
-                               ▼
-                    ┌───────────────────┐
-                    │      FastAPI      │
-                    │   Multi‑Agent     │
-                    └─────────┬─────────┘
-                              │
-     ┌────────────────────────┼────────────────────────┐
-     ▼                        ▼                        ▼
-Redis Cache            Qdrant Vector DB         OpenTelemetry
-Caching, rate‑limiting   Embeddings + RAG       Traces + Metrics
 🛠️ Tech Stack
-Backend
+🔧 Backend
 FastAPI
-
 Python 3.12
-
 Pydantic
-
 Async orchestration
-
 OpenTelemetry instrumentation
-
-Frontend
+🎨 Frontend
 Streamlit
-
-Real‑time product analysis dashboard
-
-AI / ML
-LLM‑based agents
-
+Real-time analysis dashboard
+🤖 AI / ML
+LLM-based agents
 RAG with Qdrant
-
-Sentiment + aspect sentiment
-
+Sentiment analysis (global + aspect)
 Topic modeling
-
 Counterfactual reasoning
-
-Infrastructure
+☁️ Infrastructure
 Docker
-
 Kubernetes (Deployments, StatefulSets, Services, Ingress)
-
-Redis (cache)
-
-Qdrant (vector DB)
-
-GitHub Actions CI/CD
-
+Redis (caching & messaging)
+Qdrant (vector database)
+GitHub Actions (CI/CD)
 📦 Project Structure
-Code
 app/
   ├── api/
   │   ├── main.py
@@ -123,6 +116,7 @@ app/
   ├── utils/
   └── ui/
       └── streamlit_app.py
+
 k8s/
   ├── api-deployment.yaml
   ├── api-service.yaml
@@ -135,106 +129,73 @@ k8s/
   ├── ingress.yaml
   ├── configmap.yaml
   └── secret.yaml
+
 🐳 Running Locally (Docker Compose)
-bash
 docker-compose up --build
-Services:
+Services
+Service	URL
+API	http://localhost:8000
 
-API → http://localhost:8000
+Streamlit UI	http://localhost:8501
 
-Streamlit UI → http://localhost:8501
-
-Redis → localhost:6379
-
-Qdrant → http://localhost:6333
-
+Redis	localhost:6379
+Qdrant	http://localhost:6333
 ☸️ Kubernetes Deployment
+
 Apply all manifests:
 
-bash
 kubectl apply -f k8s/
-Access the UI via Ingress:
-Code
-https://ui.yourdomain.com
-Access the API:
-Code
-https://api.yourdomain.com
+Access
+UI → https://ui.yourdomain.com
+API → https://api.yourdomain.com
 🔐 Environment Variables
 ConfigMap (ecommerce-config)
 ENV
-
 LOG_LEVEL
-
 REDIS_URL
-
 QDRANT_URL
-
 METRICS_PORT
-
 RATE_LIMIT_PER_MINUTE
-
 OTEL_*
-
 Secret (ecommerce-secrets)
 OPENAI_API_KEY
-
 QDRANT_API_KEY
-
 API_KEY
-
 📊 Observability
+
 The system includes:
 
 OpenTelemetry tracing
-
 Metrics endpoint
-
 Health, readiness, and liveness probes
-
 Distributed tracing across agents
 
-You can plug this into:
+Compatible with:
 
 Grafana
-
 Tempo
-
 Prometheus
-
 Jaeger
-
 🧪 Testing
-Run unit tests:
-
-bash
 pytest -q
 📈 Roadmap
-[ ] Add multi‑product batch analysis
-
-[ ] Add user authentication
-
-[ ] Add product comparison agent
-
-[ ] Add fine‑tuned embedding model
-
-[ ] Add GPU support for inference
-
+ Multi-product batch analysis
+ User authentication
+ Product comparison agent
+ Fine-tuned embedding model
+ GPU support for inference
 🤝 Contributing
+
 Pull requests are welcome.
 Please open an issue first to discuss major changes.
 
 📄 License
+
 MIT License.
 
 🙌 Acknowledgements
-This project integrates:
-
-Qdrant (vector search)
-
-Redis (caching)
-
-Streamlit (UI)
-
-FastAPI (backend)
-
-OpenTelemetry (observability)
+Qdrant — vector search
+Redis — caching & messaging
+Streamlit — UI
+FastAPI — backend API
+OpenTelemetry — observability

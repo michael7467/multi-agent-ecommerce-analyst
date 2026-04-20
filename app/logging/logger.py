@@ -28,10 +28,10 @@ def _get_log_file_path() -> str:
 
 def configure_logger(service_name: str = "multi-agent-ecommerce-analyst") -> logging.Logger:
     """
-    Configure a production-ready logger:
+    Production-ready logger:
     - JSON logs
-    - STDOUT handler (for Docker/Kubernetes)
-    - Optional file handler (for local dev)
+    - STDOUT handler (Kubernetes)
+    - Optional file handler (local dev only)
     - Environment-based log level
     """
     logger = logging.getLogger(service_name)
@@ -43,20 +43,23 @@ def configure_logger(service_name: str = "multi-agent-ecommerce-analyst") -> log
         "%(asctime)s %(levelname)s %(name)s %(lineno)d %(message)s %(trace_id)s"
     )
 
-
-    # STDOUT handler (primary in containers)
+    # Always log to STDOUT (Kubernetes best practice)
     stdout_handler = logging.StreamHandler(sys.stdout)
     stdout_handler.setFormatter(json_formatter)
     logger.addHandler(stdout_handler)
 
-    # Optional file handler (useful locally)
-    if os.getenv("ENABLE_FILE_LOGS", "true").lower() == "true":
-        file_handler = logging.FileHandler(_get_log_file_path())
-        file_handler.setFormatter(json_formatter)
-        logger.addHandler(file_handler)
+    # Enable file logging ONLY if explicitly set
+    if os.getenv("ENABLE_FILE_LOGS", "false").lower() == "true":
+        try:
+            file_handler = logging.FileHandler(_get_log_file_path())
+            file_handler.setFormatter(json_formatter)
+            logger.addHandler(file_handler)
+        except Exception as e:
+            logger.error("Failed to initialize file logging", extra={"error": str(e)})
 
     logger.info("Logger initialized", extra={"service": service_name})
     return logger
+
 
 
 # Convenience function for modules that just want a logger

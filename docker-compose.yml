@@ -5,27 +5,72 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.api
+    container_name: ecommerce-api
     ports:
       - "8000:8000"
     environment:
       REDIS_URL: redis://redis:6379/0
       OTEL_SERVICE_NAME: multi-agent-ecommerce-analyst-api
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_TRACES_EXPORTER_MODE: console
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - backend
 
   streamlit:
     build:
       context: .
       dockerfile: Dockerfile.streamlit
+    container_name: ecommerce-ui
     ports:
       - "8501:8501"
     environment:
       REDIS_URL: redis://redis:6379/0
       OTEL_SERVICE_NAME: multi-agent-ecommerce-analyst-ui
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_TRACES_EXPORTER_MODE: console
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - backend
 
   redis:
     image: redis:7
+    container_name: redis
     ports:
       - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - backend
+
+# Optional: OpenTelemetry collector (recommended)
+  otel-collector:
+    image: otel/opentelemetry-collector:latest
+    container_name: otel-collector
+    volumes:
+      - ./otel-config.yaml:/etc/otel/config.yaml
+    command: ["--config=/etc/otel/config.yaml"]
+    ports:
+      - "4318:4318"
+    restart: unless-stopped
+    networks:
+      - backend
+
+volumes:
+  redis_data:
+
+networks:
+  backend:
+    driver: bridge

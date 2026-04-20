@@ -2,37 +2,25 @@ from __future__ import annotations
 
 from app.agents.base_agent import BaseAgent
 from app.services.buy_decision_service import BuyDecisionService
+from app.logging.logger import get_logger
+from app.observability.agent_tracing import traced_agent
 
+logger = get_logger("agents.buy_decision")
 
 class BuyDecisionAgent(BaseAgent):
     def __init__(self) -> None:
         super().__init__(name="BuyDecisionAgent")
         self.service = BuyDecisionService()
 
+    @traced_agent
     def run(self, analysis_result: dict) -> dict:
-        decision_result = self.service.make_decision(analysis_result)
+        if not isinstance(analysis_result, dict):
+            raise ValueError("BuyDecisionAgent: analysis_result must be a dict")
+
+        try:
+            decision_result = self.service.make_decision(analysis_result)
+        except Exception:
+            logger.error(f"{self.name}: buy decision failed", exc_info=True)
+            raise
+
         return {"buy_decision": decision_result}
-
-
-if __name__ == "__main__":
-    sample = {
-        "title": "Sample Headphones",
-        "price": 59.99,
-        "predicted_class": "high",
-        "sentiment": {
-            "avg_sentiment_score": 0.91,
-            "positive_review_ratio": 0.95,
-        },
-        "aspect_sentiment": {
-            "sound_quality": {"label": "mixed"},
-            "battery_life": {"label": "positive"},
-            "comfort": {"label": "positive"},
-            "build_quality": {"label": "mixed"},
-            "price_value": {"label": "positive"},
-        },
-        "evidence": [{"x": 1}, {"x": 2}],
-        "recommendations": [{"product_id": "abc"}],
-    }
-
-    agent = BuyDecisionAgent()
-    print(agent.run(sample))

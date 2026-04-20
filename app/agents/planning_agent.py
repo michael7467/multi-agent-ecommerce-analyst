@@ -2,9 +2,14 @@ from __future__ import annotations
 
 import json
 
+from altair import value
+
 from app.agents.base_agent import BaseAgent
 from app.models.llm.llm_client import LLMClient
+from app.logging.logger import get_logger
+from app.observability.agent_tracing import traced_agent
 
+logger = get_logger("agents.planning_agent")
 
 class PlanningAgent(BaseAgent):
     def __init__(self) -> None:
@@ -57,7 +62,7 @@ class PlanningAgent(BaseAgent):
     {query}
 
     Return JSON with exactly these keys:
-    {{
+    {
     "use_data": true,
     "use_sentiment": false,
     "use_aspect_sentiment": false,
@@ -71,10 +76,10 @@ class PlanningAgent(BaseAgent):
     "use_report": true,
     "use_guardrail": false,
     "use_critic": false,
-    "use_competitive": False,
-    "use_buy_decision": False,
-    "use_trends": False,
-    }}
+    "use_competitive": false,
+    "use_buy_decision": false,
+    "use_trends": false,
+    }
     """.strip()
     def _safe_default_plan(self) -> dict:
         return {
@@ -101,15 +106,18 @@ class PlanningAgent(BaseAgent):
         normalized = {}
 
         for key, default_value in default.items():
-            normalized[key] = bool(plan.get(key, default_value))
+            value = plan.get(key, default_value)
+            normalized[key] = value if isinstance(value, bool) else default_value
 
+        # Always true
         normalized["use_data"] = True
 
-        if normalized["use_forecast"] and normalized["use_report"]:
-            normalized["use_guardrail"] = True
-        else:
-            normalized["use_guardrail"] = False
+        # Guardrail rule
+        normalized["use_guardrail"] = (
+            normalized["use_forecast"] and normalized["use_report"]
+        )
 
+        # Critic rule
         if not normalized["use_report"]:
             normalized["use_critic"] = False
 
@@ -151,60 +159,42 @@ class PlanningAgent(BaseAgent):
         critic_terms = [
             "evaluate", "verify", "critique", "reliable", "trust", "judge"
         ]
+
         topic_terms = [
             "theme", "themes", "topic", "topics",
             "pain point", "pain points", "common issues",
             "common problems", "main problems"
         ]
 
-
         counterfactual_terms = [
-                "what if",
-                "counterfactual",
-                "would change",
-                "if rating increased",
-                "if reviews increased",
-                "how could",
-                "what would need to change",
-            ]
-        competitive_terms = [
-            "compare",
-            "competitor",
-            "competitors",
-            "vs",
-            "versus",
-            "alternative",
-            "alternatives",
-            "tradeoff",
-            "tradeoffs",
-            "strengths",
-            "weaknesses",
-            "price performance",
-        ]
-        buy_terms = [
-            "should i buy",
-            "should you buy",
-            "buy it",
-            "worth buying",
-            "is it worth it",
-            "recommend this product",
-            "would you recommend",
-        ]
-        trend_terms = [
-            "trend",
-            "trends",
-            "rising categories",
-            "declining categories",
-            "emerging complaints",
-            "seasonal",
-            "seasonality",
-            "market trend",
-            "category trend",
+            "what if", "counterfactual", "would change",
+            "if rating increased", "if reviews increased",
+            "how could", "what would need to change"
         ]
 
+        competitive_terms = [
+            "compare", "competitor", "competitors", "vs", "versus",
+            "alternative", "alternatives", "tradeoff", "tradeoffs",
+            "strengths", "weaknesses", "price performance"
+        ]
+
+        buy_terms = [
+            "should i buy", "should you buy", "buy it", "worth buying",
+            "is it worth it", "recommend this product", "would you recommend"
+        ]
+
+        trend_terms = [
+            "trend", "trends", "rising categories", "declining categories",
+            "emerging complaints", "seasonal", "seasonality",
+            "market trend", "category trend"
+        ]
+
+        # Trends
         if any(term in q for term in trend_terms):
             plan["use_trends"] = True
             plan["use_report"] = True
+
+        # Buy decision
         if any(term in q for term in buy_terms):
             plan["use_buy_decision"] = True
             plan["use_sentiment"] = True
@@ -213,49 +203,61 @@ class PlanningAgent(BaseAgent):
             plan["use_forecast"] = True
             plan["use_recommender"] = True
             plan["use_report"] = True
+
+        # Competitive
         if any(term in q for term in competitive_terms):
             plan["use_competitive"] = True
             plan["use_recommender"] = True
             plan["use_report"] = True
+
+        # Counterfactuals
         if any(term in q for term in counterfactual_terms):
-            plan["use_data"] = True
             plan["use_forecast"] = True
             plan["use_counterfactuals"] = True
             plan["use_report"] = True
 
+        # Topics
         if any(term in q for term in topic_terms):
             plan["use_topics"] = True
             plan["use_report"] = True
-            
+
+        # Opinions
         if any(term in q for term in opinion_terms):
             plan["use_sentiment"] = True
             plan["use_retrieval"] = True
 
+        # Aspect sentiment
         if any(term in q for term in aspect_terms):
             plan["use_aspect_sentiment"] = True
             plan["use_retrieval"] = True
             plan["use_summarization"] = True
 
+        # Pricing
         if any(term in q for term in pricing_terms):
             plan["use_forecast"] = True
             plan["use_sentiment"] = True
             plan["use_retrieval"] = True
             plan["use_report"] = True
 
+        # Recommender
         if any(term in q for term in recommendation_terms):
             plan["use_recommender"] = True
 
+        # Visual similarity
         if any(term in q for term in visual_terms):
             plan["use_image_retrieval"] = True
 
+        # Summaries
         if any(term in q for term in summary_terms):
             plan["use_summarization"] = True
             plan["use_retrieval"] = True
 
+        # Critic
         if any(term in q for term in critic_terms):
             plan["use_critic"] = True
 
         return self._normalize_plan(plan)
+
 
     def run(self, query: str) -> dict:
         prompt = self._build_prompt(query)
@@ -263,11 +265,15 @@ class PlanningAgent(BaseAgent):
         try:
             raw_response = self.llm.generate_text(prompt)
             plan = json.loads(raw_response)
-            plan = self._normalize_plan(plan)
-        except Exception:
+        except Exception as e:
+            logger.error(f"PlanningAgent JSON parse error: {e}")
             plan = self._safe_default_plan()
 
+        # Apply rule-based overrides BEFORE normalization
         plan = self._rule_boost(query, plan)
+
+        # Normalize once at the end
+        plan = self._normalize_plan(plan)
 
         return {"plan": plan}
 

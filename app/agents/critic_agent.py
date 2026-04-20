@@ -2,12 +2,21 @@ from __future__ import annotations
 
 from app.agents.base_agent import BaseAgent
 from app.models.llm.llm_client import LLMClient
+from app.logging.logger import get_logger
+from app.observability.agent_tracing import traced_agent
 
+logger = get_logger("agents.critic")
 
 class CriticAgent(BaseAgent):
     def __init__(self) -> None:
         super().__init__(name="CriticAgent")
         self.llm = LLMClient(model="gpt-4.1-mini")
+
+    def _safe_float(self, value):
+        try:
+            return float(value)
+        except Exception:
+            return 0.0
 
     def _build_prompt(self, analysis_result: dict, report: str) -> str:
         predicted_class = analysis_result.get("predicted_class", "")
@@ -21,30 +30,31 @@ class CriticAgent(BaseAgent):
 
         evidence_text = []
         for i, ev in enumerate(evidence, start=1):
+            score = self._safe_float(ev.get("score", 0))
             evidence_text.append(
                 f"""Evidence {i}:
 Review title: {ev.get("review_title", "")}
 Review text: {ev.get("review_text", "")}
-Score: {ev.get("score", 0):.4f}
+Score: {score:.4f}
 """
             )
 
         recommendation_text = []
         for i, rec in enumerate(recommendations, start=1):
+            sim = self._safe_float(rec.get("similarity_score", 0))
             recommendation_text.append(
                 f"""Recommendation {i}:
 Product ID: {rec.get("product_id", "")}
 Title: {rec.get("title", "")}
-Similarity: {rec.get("similarity_score", 0):.4f}
+Similarity: {sim:.4f}
 Predicted Class: {rec.get("predicted_class", "")}
 """
             )
 
-        aspect_text = []
-        for aspect, payload in aspect_summaries.items():
-            aspect_text.append(
-                f"{aspect}: {payload.get('summary', '')}"
-            )
+        aspect_text = [
+            f"{aspect}: {payload.get('summary', '')}"
+            for aspect, payload in aspect_summaries.items()
+        ]
 
         prompt = f"""
 You are a critic agent in a multi-agent e-commerce intelligence system.
@@ -97,30 +107,18 @@ Critique: <short critique>
 """
         return prompt.strip()
 
+    @traced_agent
     def run(self, analysis_result: dict, report: str) -> dict:
-        prompt = self._build_prompt(analysis_result, report)
-        critique = self.llm.generate_text(prompt)
+        if not isinstance(analysis_result, dict):
+            raise ValueError("CriticAgent: analysis_result must be a dict")
+        if not isinstance(report, str):
+            raise ValueError("CriticAgent: report must be a string")
 
-        return {
-            "critic_report": critique
-        }
+        try:
+            prompt = self._build_prompt(analysis_result, report)
+            critique = self.llm.generate_text(prompt)
+        except Exception:
+            logger.error(f"{self.name}: critique generation failed", exc_info=True)
+            raise
 
-
-if __name__ == "__main__":
-    from app.agents.orchestrator import Orchestrator
-
-    orchestrator = Orchestrator()
-    result = orchestrator.run(
-        product_id="B09SPZPDJK",
-        query="sound quality and noise cancellation",
-        top_k=3,
-    )
-
-    agent = CriticAgent()
-    critic_result = agent.run(
-        analysis_result=result["final_output"],
-        report=result["final_output"]["report"],
-    )
-
-    print("\n=== CRITIC REPORT ===\n")
-    print(critic_result["critic_report"])
+        return {"critic_report": critique}

@@ -8,18 +8,36 @@ from app.observability.metrics import RETRIEVAL_LATENCY_SECONDS, RETRIEVAL_REQUE
 from app.observability.tracing import get_tracer
 from app.rag.qdrant_client_manager import get_qdrant_client
 from app.core.config import settings
+from app.logging.logger import get_logger
+
+logger = get_logger("rag.qdrant")
 
 COLLECTION_NAME = settings.qdrant_collection_name
 EMBED_MODEL_NAME = settings.embedding_model_name
 
+# Singleton model to avoid repeated loading
+_MODEL = None
+
 
 class QdrantRetriever:
     def __init__(self) -> None:
+        global _MODEL
+
         self.client = get_qdrant_client()
-        self.model = SentenceTransformer(EMBED_MODEL_NAME)
+
+        if _MODEL is None:
+            _MODEL = SentenceTransformer(EMBED_MODEL_NAME)
+
+        self.model = _MODEL
         self.tracer = get_tracer("app.qdrant_retriever")
 
+        if not self.client.collection_exists(COLLECTION_NAME):
+            raise RuntimeError(f"Qdrant collection '{COLLECTION_NAME}' does not exist")
+
     def _embed_query(self, query: str) -> list[float]:
+        if not isinstance(query, str) or not query.strip():
+            raise ValueError("QdrantRetriever: query must be a non-empty string")
+
         vector = self.model.encode([query], normalize_embeddings=True)[0]
         return vector.astype(np.float32).tolist()
 
@@ -29,6 +47,9 @@ class QdrantRetriever:
         top_k: int = 5,
         product_id: str | None = None,
     ) -> list[dict]:
+        if not isinstance(top_k, int) or top_k <= 0:
+            raise ValueError("QdrantRetriever: top_k must be a positive integer")
+
         RETRIEVAL_REQUESTS_TOTAL.inc()
 
         with RETRIEVAL_LATENCY_SECONDS.time():
@@ -51,13 +72,17 @@ class QdrantRetriever:
                         ]
                     )
 
-                results = self.client.query_points(
-                    collection_name=COLLECTION_NAME,
-                    query=query_vector,
-                    query_filter=query_filter,
-                    limit=top_k,
-                    with_payload=True,
-                )
+                try:
+                    results = self.client.query_points(
+                        collection_name=COLLECTION_NAME,
+                        query=query_vector,
+                        query_filter=query_filter,
+                        limit=top_k,
+                        with_payload=True,
+                    )
+                except Exception:
+                    logger.error("Qdrant query failed", exc_info=True)
+                    raise
 
                 output = []
                 for point in results.points:
@@ -77,24 +102,3 @@ class QdrantRetriever:
 
                 span.set_attribute("results_count", len(output))
                 return output
-
-
-if __name__ == "__main__":
-    retriever = QdrantRetriever()
-
-    print("\n=== GLOBAL SEARCH ===")
-    global_results = retriever.search(
-        query="sound quality and noise cancellation",
-        top_k=5,
-    )
-    for r in global_results:
-        print(r)
-
-    print("\n=== PRODUCT FILTERED SEARCH ===")
-    filtered_results = retriever.search(
-        query="sound quality and noise cancellation",
-        top_k=3,
-        product_id="B09SPZPDJK",
-    )
-    for r in filtered_results:
-        print(r)

@@ -1,0 +1,98 @@
+{
+  "title": "Multi-Agent E-commerce AI Platform",
+  "uid": "ai-platform",
+  "schemaVersion": 36,
+  "version": 1,
+  "panels": [
+    {
+      "type": "stat",
+      "title": "API Request Rate",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total[1m]))",
+          "legendFormat": "req/s"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "API Latency (P95)",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p95"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Error Rate (4xx/5xx)",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total{status=~\"4..\"}[5m]))",
+          "legendFormat": "4xx"
+        },
+        {
+          "expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m]))",
+          "legendFormat": "5xx"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Agent Execution Time",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "rate(agent_execution_seconds_sum[5m]) / rate(agent_execution_seconds_count[5m])",
+          "legendFormat": "{{agent}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Agent Error Count",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(rate(agent_errors_total[5m])) by (agent)",
+          "legendFormat": "{{agent}}"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Cache Hit Ratio",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(rate(cache_hits_total[5m])) / (sum(rate(cache_hits_total[5m])) + sum(rate(cache_misses_total[5m])))",
+          "legendFormat": "hit ratio"
+        }
+      ]
+    },
+    {
+      "type": "logs",
+      "title": "Logs (Loki)",
+      "datasource": "Loki",
+      "targets": [
+        {
+          "expr": "{app=\"api\"}"
+        }
+      ]
+    },
+    {
+      "type": "traces",
+      "title": "Traces (Tempo)",
+      "datasource": "Tempo",
+      "targets": [
+        {
+          "query": ""
+        }
+      ]
+    }
+  ]
+}

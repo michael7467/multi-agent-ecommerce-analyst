@@ -1,45 +1,45 @@
 from __future__ import annotations
 
 import os
-from app.core.config import settings
+from app.config.settings import settings
 from opentelemetry import trace
 from opentelemetry.sdk.resources import Resource
-from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace import TracerProvider, SpanLimits
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
+from opentelemetry.sdk.trace.sampling import TraceIdRatioBased
 
 try:
     from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 except Exception:
     OTLPSpanExporter = None
 
-
 _TRACING_INITIALIZED = False
-
 
 def setup_tracing() -> None:
     global _TRACING_INITIALIZED
-
     if _TRACING_INITIALIZED:
         return
 
-    service_name = settings.otel_service_name
-    exporter_mode = settings.otel_traces_exporter_mode
+    resource = Resource.create({
+        "service.name": settings.otel_service_name,
+        "service.version": "1.0.0",
+        "deployment.environment": settings.env,
+        "k8s.namespace": os.getenv("K8S_NAMESPACE", "default"),
+    })
 
-    resource = Resource.create(
-        {
-            "service.name": service_name,
-            "service.version": "1.0.0",
-        }
+    provider = TracerProvider(
+        resource=resource,
+        sampler=TraceIdRatioBased(settings.tracing_sample_rate),
+        span_limits=SpanLimits(
+            max_attributes=128,
+            max_events=128,
+            max_links=32,
+        )
     )
 
-    provider = TracerProvider(resource=resource)
-
-    if exporter_mode == "otlp" and OTLPSpanExporter is not None:
-        otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT") or os.getenv(
-            "OTEL_EXPORTER_OTLP_ENDPOINT",
-            "http://localhost:4318/v1/traces",
-        )
-        processor = BatchSpanProcessor(OTLPSpanExporter(endpoint=otlp_endpoint))
+    if settings.otel_traces_exporter_mode == "otlp" and OTLPSpanExporter:
+        endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318/v1/traces")
+        processor = BatchSpanProcessor(OTLPSpanExporter(endpoint=endpoint))
     else:
         processor = BatchSpanProcessor(ConsoleSpanExporter())
 
@@ -47,7 +47,6 @@ def setup_tracing() -> None:
     trace.set_tracer_provider(provider)
 
     _TRACING_INITIALIZED = True
-
 
 def get_tracer(name: str = "app.tracing"):
     setup_tracing()

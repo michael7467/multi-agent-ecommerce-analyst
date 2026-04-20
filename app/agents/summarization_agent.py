@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from app.agents.base_agent import BaseAgent
+from app.observability.agent_tracing import traced_agent
 from app.services.aspect_service import AspectService
 from app.services.summarization_service import SummarizationService
 
@@ -10,7 +11,8 @@ class SummarizationAgent(BaseAgent):
         super().__init__(name="SummarizationAgent")
         self.aspect_service = AspectService()
         self.summarization_service = SummarizationService()
-
+        
+    @traced_agent("SummarizationAgent")
     def run(self, product_id: str, top_k: int = 3) -> dict:
         aspect_evidence = self.aspect_service.get_aspect_evidence(
             product_id=product_id,

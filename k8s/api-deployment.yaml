@@ -14,13 +14,16 @@ spec:
     spec:
       containers:
         - name: api
-          image: multi-agent-ecommerce-analyst-api:v5
+          image: ghcr.io/YOUR_USERNAME/multi-agent-ecommerce-analyst-api:v5
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000
+
           env:
             - name: REDIS_URL
               value: redis://redis-service:6379/0
+            - name: OTEL_SERVICE_NAME
+              value: multi-agent-ecommerce-analyst-api
 
           startupProbe:
             httpGet:
@@ -47,17 +50,21 @@ spec:
             timeoutSeconds: 3
             failureThreshold: 3
 
+          volumeMounts:
+            - name: artifacts-storage
+              mountPath: /app/artifacts
 
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
 
+      volumes:
+        - name: artifacts-storage
+          persistentVolumeClaim:
+            claimName: artifacts-pvc
 
-
-
-
-volumeMounts:
-  - name: artifacts-storage
-    mountPath: /app/artifacts
-
-volumes:
-  - name: artifacts-storage
-    persistentVolumeClaim:
-      claimName: artifacts-pvc
+      restartPolicy: Always

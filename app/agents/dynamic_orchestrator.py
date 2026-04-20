@@ -30,6 +30,24 @@ from app.agents.buy_decision_agent import BuyDecisionAgent
 from app.agents.competitive_agent import CompetitiveAgent
 from app.agents.trend_agent import TrendAgent
 
+
+import traceback
+from app.logging.logger import get_logger
+from opentelemetry.trace import get_current_span
+
+logger = get_logger("orchestrator")
+
+
+def _get_trace_id() -> str | None:
+    span = get_current_span()
+    if not span:
+        return None
+    ctx = span.get_span_context()
+    if not ctx or ctx.trace_id == 0:
+        return None
+    return format(ctx.trace_id, "032x")
+
+
 class DynamicOrchestrator:
     def __init__(self) -> None:
         self.planning_agent = PlanningAgent()
@@ -48,10 +66,49 @@ class DynamicOrchestrator:
         self.topic_agent = TopicAgent()
         self.counterfactual_agent = CounterfactualAgent()
         self.cache_service = CacheService()
-        self.tracer = get_tracer("app.dynamic_orchestrator")
         self.competitive_agent = CompetitiveAgent()
         self.buy_decision_agent = BuyDecisionAgent()
         self.trend_agent = TrendAgent()
+        self.tracer = get_tracer("app.dynamic_orchestrator")
+
+    def _safe_agent_call(self, name: str, fn, **kwargs):
+        """
+        Wraps each agent call with:
+        - tracing
+        - structured logging
+        - graceful fallback
+        - error isolation
+        """
+        with self.tracer.start_as_current_span(f"{name}.run") as span:
+            span.set_attribute("agent", name)
+            span.set_attribute("args", str(kwargs))
+
+            try:
+                result = fn(**kwargs)
+                if not isinstance(result, dict):
+                    raise ValueError(f"{name} returned non-dict result")
+
+                logger.info(
+                    f"{name} completed",
+                    extra={
+                        "agent": name,
+                        "trace_id": _get_trace_id(),
+                        "args": kwargs,
+                    },
+                )
+                return result
+
+            except Exception as exc:
+                logger.error(
+                    f"{name} failed",
+                    extra={
+                        "agent": name,
+                        "error": str(exc),
+                        "trace_id": _get_trace_id(),
+                        "stack": traceback.format_exc(),
+                    },
+                )
+                raise
 
     def run(self, product_id: str, query: str, top_k: int = 3) -> dict:
         ANALYSIS_REQUESTS_TOTAL.inc()
@@ -59,206 +116,265 @@ class DynamicOrchestrator:
         with IN_PROGRESS_ANALYSIS.track_inprogress():
             with ANALYSIS_LATENCY_SECONDS.time():
                 with self.tracer.start_as_current_span("dynamic_orchestrator.run") as span:
-                    span.set_attribute("product_id", str(product_id))
-                    span.set_attribute("query", str(query))
-                    span.set_attribute("top_k", int(top_k))
+                    trace_id = _get_trace_id()
 
-                    cache_payload = {
-                        "product_id": product_id,
-                        "query": query,
-                        "top_k": top_k,
-                    }
-
-                    with self.tracer.start_as_current_span("cache.lookup") as cache_span:
-                        cached_result = self.cache_service.get_json("analysis:full", cache_payload)
-                        cache_hit = cached_result is not None
-                        cache_span.set_attribute("cache.hit", cache_hit)
-
-                    if cached_result is not None:
-                        CACHE_HITS_TOTAL.inc()
-                        span.set_attribute("cache.hit", True)
-                        return cached_result
-
-                    CACHE_MISSES_TOTAL.inc()
-                    span.set_attribute("cache.hit", False)
+                    logger.info(
+                        "Starting analysis",
+                        extra={
+                            "product_id": product_id,
+                            "query": query,
+                            "top_k": top_k,
+                            "trace_id": trace_id,
+                        },
+                    )
 
                     try:
-                        with self.tracer.start_as_current_span("memory.load"):
-                            memory_result = self.memory_agent.run(product_id=product_id)
-                            memory = memory_result["memory"]
+                        # -------------------------
+                        # Cache lookup
+                        # -------------------------
+                        cache_payload = {
+                            "product_id": product_id,
+                            "query": query,
+                            "top_k": top_k,
+                        }
 
-                        with self.tracer.start_as_current_span("planning.run"):
-                            planning_result = self.planning_agent.run(query=query)
-                            plan = planning_result["plan"]
+                        cached = self.cache_service.get_json("analysis:full", cache_payload)
+                        if cached:
+                            CACHE_HITS_TOTAL.inc()
+                            logger.info(
+                                "Cache hit",
+                                extra={"trace_id": trace_id, "product_id": product_id},
+                            )
+                            return cached
 
-                        analysis_result: dict = {
+                        CACHE_MISSES_TOTAL.inc()
+
+                        # -------------------------
+                        # Memory + Planning
+                        # -------------------------
+                        memory = self._safe_agent_call(
+                            "memory_agent",
+                            self.memory_agent.run,
+                            product_id=product_id,
+                        )["memory"]
+
+                        plan = self._safe_agent_call(
+                            "planning_agent",
+                            self.planning_agent.run,
+                            query=query,
+                        )["plan"]
+
+                        analysis = {
                             "product_id": product_id,
                             "query": query,
                             "memory": memory,
                         }
 
+                        # -------------------------
+                        # Execute agents based on plan
+                        # -------------------------
+                        # 1. Competitive Analysis
+                        if plan.get("use_competitive"):
+                            competitive = self._safe_agent_call(
+                                "competitive_agent",
+                                self.competitive_agent.run,
+                                product_id=product_id,
+                                top_k=5,
+                            )
+                            analysis["competitive_analysis"] = competitive.get("competitive_analysis")
+                        # 2. Product Data
                         product_data = {}
-                        if plan.get("use_competitive", False):
-                            with self.tracer.start_as_current_span("competitive_agent.run"):
-                                competitive_result = self.competitive_agent.run(
-                                    product_id=product_id,
-                                    top_k=5,
-                                )
-                                analysis_result["competitive_analysis"] = competitive_result["competitive_analysis"]
-                        if plan.get("use_data", False):
-                            with self.tracer.start_as_current_span("data_agent.run"):
-                                product_data = self.data_agent.run(product_id=product_id)
-                                analysis_result.update(
-                                    {
-                                        "title": product_data.get("title", ""),
-                                        "categories": product_data.get("categories", ""),
-                                        "price": product_data.get("price", None),
-                                    }
-                                )
-                        if plan.get("use_buy_decision", False):
-                            with self.tracer.start_as_current_span("buy_decision_agent.run"):
-                                buy_decision_result = self.buy_decision_agent.run(
-                                    analysis_result=analysis_result
-                                )
-                                analysis_result["buy_decision"] = buy_decision_result["buy_decision"]
-                        if plan.get("use_topics", False):
-                            with self.tracer.start_as_current_span("topic_agent.run"):
-                                topic_result = self.topic_agent.run(top_k=5)
-                                analysis_result["top_themes"] = topic_result["top_themes"]
-                                analysis_result["pain_points"] = topic_result["pain_points"]
+                        if plan.get("use_data"):
+                            data = self._safe_agent_call(
+                                "data_agent",
+                                self.data_agent.run,
+                                product_id=product_id,
+                            )
+                            product_data = data
+                            analysis.update({
+                                "title": data.get("title"),
+                                "categories": data.get("categories"),
+                                "price": data.get("price"),
+                            })
 
-                        if plan.get("use_trends", False):
-                            with self.tracer.start_as_current_span("trend_agent.run"):
-                                trend_result = self.trend_agent.run()
-                                analysis_result["trend_analysis"] = trend_result["trend_analysis"]
-                                
-                        if plan.get("use_aspect_sentiment", False):
-                            with self.tracer.start_as_current_span("aspect_sentiment_agent.run"):
-                                aspect_sentiment_result = self.aspect_sentiment_agent.run(
-                                    product_id=product_id,
-                                    top_k=2,
-                                )
-                                analysis_result["aspect_sentiment"] = (
-                                    aspect_sentiment_result["aspect_sentiment"]
-                                )
+                        # 3. Buy Decision
+                        if plan.get("use_buy_decision"):
+                            buy_decision = self._safe_agent_call(
+                                "buy_decision_agent",
+                                self.buy_decision_agent.run,
+                                analysis_result=analysis,
+                            )
+                            analysis["buy_decision"] = buy_decision.get("buy_decision")
 
-                        if plan.get("use_sentiment", False):
-                            with self.tracer.start_as_current_span("sentiment_agent.run"):
-                                sentiment_result = self.sentiment_agent.run(product_id=product_id)
-                                analysis_result["sentiment"] = sentiment_result
+                        # 4. Topic Modeling
+                        if plan.get("use_topics"):
+                            topics = self._safe_agent_call(
+                                "topic_agent",
+                                self.topic_agent.run,
+                                top_k=5,
+                            )
+                            analysis["top_themes"] = topics.get("top_themes")
+                            analysis["pain_points"] = topics.get("pain_points")
+                        # 5. Trend Analysis
+                        if plan.get("use_trends"):
+                            trends = self._safe_agent_call(
+                                "trend_agent",
+                                self.trend_agent.run,
+                            )
+                            analysis["trend_analysis"] = trends.get("trend_analysis")
 
-                        if plan.get("use_forecast", False):
-                            with self.tracer.start_as_current_span("forecast_agent.run"):
-                                forecast_result = self.forecast_agent.run(product_data=product_data)
-                                analysis_result["predicted_class"] = forecast_result["predicted_class"]
+                        # 6. Aspect Sentiment
+                        if plan.get("use_aspect_sentiment"):
+                            aspect_sentiment = self._safe_agent_call(
+                                "aspect_sentiment_agent",
+                                self.aspect_sentiment_agent.run,
+                                product_id=product_id,
+                                top_k=2,
+                            )
+                            analysis["aspect_sentiment"] = aspect_sentiment.get("aspect_sentiment")
 
-                        if plan.get("use_counterfactuals", False):
-                            with self.tracer.start_as_current_span("counterfactual_agent.run"):
-                                if not product_data:
-                                    raise ValueError(
-                                        "Counterfactual analysis requires product data, but no product data was loaded."
-                                    )
-                                counterfactual_result = self.counterfactual_agent.run(
-                                    product_data=product_data
-                                )
-                                analysis_result["counterfactuals"] = (
-                                    counterfactual_result["counterfactuals"]
-                                )
+                        # 7. Sentiment Analysis
+                        if plan.get("use_sentiment"):
+                            sentiment = self._safe_agent_call(
+                                "sentiment_agent",
+                                self.sentiment_agent.run,
+                                product_id=product_id,
+                            )
+                            analysis["sentiment"] = sentiment
+                        # 8. Forecasting
+                        if plan.get("use_forecast"):
+                            forecast = self._safe_agent_call(
+                                "forecast_agent",
+                                self.forecast_agent.run,
+                                product_data=product_data,
+                            )
+                            analysis["predicted_class"] = forecast.get("predicted_class")
 
-                        if plan.get("use_retrieval", False):
-                            with self.tracer.start_as_current_span("retrieval_agent.run"):
-                                retrieval_result = self.retrieval_agent.run(
-                                    product_id=product_id,
-                                    query=query,
-                                    top_k=top_k,
-                                )
-                                analysis_result["evidence"] = retrieval_result["evidence"]
+                        # 9. Counterfactuals
+                        if plan.get("use_counterfactuals"):
+                            if not product_data:
+                                raise ValueError("Counterfactual analysis requires product data.")
+                            counterfactuals = self._safe_agent_call(
+                                "counterfactual_agent",
+                                self.counterfactual_agent.run,
+                                product_data=product_data,
+                            )
+                            analysis["counterfactuals"] = counterfactuals.get("counterfactuals")
 
-                        if plan.get("use_recommender", False):
-                            with self.tracer.start_as_current_span("recommender_agent.run"):
-                                recommendation_result = self.recommender_agent.run(
-                                    product_id=product_id,
-                                    top_k=3,
-                                )
-                                analysis_result["recommendations"] = (
-                                    recommendation_result["recommendations"]
-                                )
+                        # 10. Retrieval (RAG)
+                        if plan.get("use_retrieval"):
+                            retrieval = self._safe_agent_call(
+                                "retrieval_agent",
+                                self.retrieval_agent.run,
+                                product_id=product_id,
+                                query=query,
+                                top_k=top_k,
+                            )
+                            analysis["evidence"] = retrieval.get("evidence")
+                        # 11. Recommender
+                        if plan.get("use_recommender"):
+                            recs = self._safe_agent_call(
+                                "recommender_agent",
+                                self.recommender_agent.run,
+                                product_id=product_id,
+                                top_k=3,
+                            )
+                            analysis["recommendations"] = recs.get("recommendations")
 
-                        if plan.get("use_image_retrieval", False):
-                            with self.tracer.start_as_current_span("image_retrieval_agent.run"):
-                                image_result = self.image_retrieval_agent.run(
-                                    product_id=product_id,
-                                    top_k=3,
-                                )
-                                analysis_result["image_similar_products"] = (
-                                    image_result["image_similar_products"]
-                                )
+                        # 12. Image Retrieval
+                        if plan.get("use_image_retrieval"):
+                            images = self._safe_agent_call(
+                                "image_retrieval_agent",
+                                self.image_retrieval_agent.run,
+                                product_id=product_id,
+                                top_k=3,
+                            )
+                            analysis["image_similar_products"] = images.get("image_similar_products")
 
-                        if plan.get("use_summarization", False):
-                            with self.tracer.start_as_current_span("summarization_agent.run"):
-                                summarization_result = self.summarization_agent.run(
-                                    product_id=product_id,
-                                    top_k=2,
-                                )
-                                analysis_result["aspect_summaries"] = (
-                                    summarization_result["aspect_summaries"]
-                                )
+                        # 13. Summarization
+                        if plan.get("use_summarization"):
+                            summaries = self._safe_agent_call(
+                                "summarization_agent",
+                                self.summarization_agent.run,
+                                product_id=product_id,
+                                top_k=2,
+                            )
+                            analysis["aspect_summaries"] = summaries.get("aspect_summaries")
 
-                        if plan.get("use_report", False):
+                        # 14. Report Generation
+                        if plan.get("use_report"):
                             with REPORT_LATENCY_SECONDS.time():
-                                with self.tracer.start_as_current_span("report_agent.run"):
-                                    report_result = self.report_agent.run(
-                                        analysis_result=analysis_result
-                                    )
-                                    analysis_result["report"] = report_result["report"]
-
-                        if (
-                            plan.get("use_guardrail", False)
-                            and "predicted_class" in analysis_result
-                            and "report" in analysis_result
-                        ):
-                            with self.tracer.start_as_current_span("guardrail_agent.run"):
-                                guardrail_result = self.guardrail_agent.run(
-                                    predicted_class=analysis_result["predicted_class"],
-                                    report=analysis_result["report"],
+                                report = self._safe_agent_call(
+                                    "report_agent",
+                                    self.report_agent.run,
+                                    analysis_result=analysis,
                                 )
-                                analysis_result["guardrail_status"] = guardrail_result["status"]
+                                analysis["report"] = report.get("report")
 
-                        if plan.get("use_critic", False) and "report" in analysis_result:
-                            with self.tracer.start_as_current_span("critic_agent.run"):
-                                critic_result = self.critic_agent.run(
-                                    analysis_result=analysis_result,
-                                    report=analysis_result["report"],
-                                )
-                                analysis_result["critic_report"] = critic_result["critic_report"]
+                        # 15. Guardrail
+                        if plan.get("use_guardrail") and "predicted_class" in analysis and "report" in analysis:
+                            guardrail = self._safe_agent_call(
+                                "guardrail_agent",
+                                self.guardrail_agent.run,
+                                predicted_class=analysis["predicted_class"],
+                                report=analysis["report"],
+                            )
+                            analysis["guardrail_status"] = guardrail.get("status")
+                        # 16. Critic Agent
+                        if plan.get("use_critic") and "report" in analysis:
+                            critic = self._safe_agent_call(
+                                "critic_agent",
+                                self.critic_agent.run,
+                                analysis_result=analysis,
+                                report=analysis["report"],
+                            )
+                            analysis["critic_report"] = critic.get("critic_report")
+                       
+                    
 
-                        if "report" in analysis_result:
-                            with self.tracer.start_as_current_span("memory.save"):
-                                self.memory_agent.save_product_memory(analysis_result)
-                                self.memory_agent.save_history(
-                                    product_id=product_id,
-                                    query=query,
-                                    report=analysis_result["report"],
-                                )
-
-                        final_result = {
-                            "plan": plan,
-                            "final_output": analysis_result,
-                        }
-
-                        with self.tracer.start_as_current_span("cache.write"):
-                            self.cache_service.set_json(
-                                "analysis:full",
-                                cache_payload,
-                                final_result,
-                                ttl_seconds=3600,
+                        # -------------------------
+                        # Save memory
+                        # -------------------------
+                        if "report" in analysis:
+                            self.memory_agent.save_product_memory(analysis)
+                            self.memory_agent.save_history(
+                                product_id=product_id,
+                                query=query,
+                                report=analysis["report"],
                             )
 
-                        return final_result
+                        final = {"plan": plan, "final_output": analysis}
+
+                        # -------------------------
+                        # Cache write
+                        # -------------------------
+                        self.cache_service.set_json(
+                            "analysis:full",
+                            cache_payload,
+                            final,
+                            ttl_seconds=3600,
+                        )
+
+                        logger.info(
+                            "Analysis completed",
+                            extra={"trace_id": trace_id, "product_id": product_id},
+                        )
+
+                        return final
 
                     except Exception:
                         ANALYSIS_ERRORS_TOTAL.inc()
+                        logger.error(
+                            "Analysis failed",
+                            extra={
+                                "product_id": product_id,
+                                "query": query,
+                                "trace_id": trace_id,
+                                "stack": traceback.format_exc(),
+                            },
+                        )
                         raise
+
 
 
 if __name__ == "__main__":

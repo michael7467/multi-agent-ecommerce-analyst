@@ -1,119 +1,240 @@
-# Multi-Agent E-commerce AI Analyst
+🧠 Multi‑Agent E‑Commerce Analyst
+AI‑powered product intelligence platform with multi‑agent orchestration, RAG, sentiment analysis, topic modeling, and real‑time insights.
 
-A multi-agent AI system for e-commerce product analysis that combines machine learning, retrieval, and explainable AI.  
-The project predicts product price class using structured and text-based features, and will later explain predictions using RAG-based evidence retrieval and multi-agent workflows.
+A fully production‑ready system built with:
 
-## Features
-- Product-level data pipeline from Amazon Reviews 2023 (Electronics)
-- Baseline ML model for price class prediction
-- Improved ML model with TF-IDF text features
-- Saved model artifacts and prediction pipeline
-- Upcoming RAG-based evidence retrieval
-- Upcoming multi-agent analysis workflow
-- Evaluation of ML and RAG outputs
+FastAPI (backend API)
 
-## Architecture
-- Data Agent → loads product and review data
-- Forecast Agent → predicts product price class
-- Retrieval Agent → retrieves supporting evidence
-- Report Agent → generates grounded explanation
-- Guardrail Agent → validates output consistency
+Streamlit (UI)
 
-## Tech Stack
-- Python
-- Pandas
-- Scikit-learn
-- Joblib
-- FastAPI
-- FAISS / Chroma (planned)
-- LLM API (planned)
+Multi‑Agent Orchestration (Planner, Data, Memory, Report, Critic, Guardrail…)
 
-## Project Structure
-- `app/data/` → loading, cleaning, merging, feature engineering
-- `app/models/forecasting/` → training and prediction
-- `app/rag/` → retrieval pipeline
-- `app/agents/` → multi-agent workflow
-- `app/evaluation/` → ML and RAG evaluation
-- `artifacts/models/` → trained model files
+Redis (caching + message bus)
 
-## Phase 1: Data Pipeline ✅
+Qdrant (vector search for RAG + embeddings)
 
-Completed:
-- Downloaded and sampled Amazon Reviews 2023 (Electronics)
-- Built data loaders for reviews and metadata
-- Cleaned and normalized datasets
-- Merged reviews with product metadata
-- Built product-level feature table
+OpenTelemetry (tracing + metrics)
 
-Outputs:
-- ~50K cleaned reviews
-- ~34K matched products
-- Product-level feature dataset for ML modeling
+Docker + Kubernetes (deployment)
 
-## Phase 2: ML Baseline and Improved Text Model ✅
+GitHub Actions (CI/CD)
 
-Completed:
-- Created supervised labels using price tertiles (`low`, `mid`, `high`)
-- Trained a baseline numeric-feature model
-- Trained an improved text-enhanced model using TF-IDF on title and category fields
-- Saved trained models and label encoders
-- Built prediction script for inference
+This platform analyzes e‑commerce products using LLM‑driven agents, retrieves evidence from reviews, generates insights, and produces a final decision report.
 
-Key results:
-- Baseline numeric model accuracy: **0.38**
-- Text-enhanced model accuracy: **0.71**
+🚀 Features
+🔹 Multi‑Agent Architecture
+A coordinated set of agents:
 
-Main insight:
-- Structured review statistics alone were weak predictors of price class
-- Semantic text features dramatically improved performance
-- This motivates the next phase: retrieval and explanation with RAG
+PlanningAgent — builds the execution plan
 
-## Phase 3A: RAG Retrieval Pipeline ✅
+DataAgent — fetches product data + reviews
 
-Completed:
-- Built review document corpus for retrieval
-- Generated sentence embeddings using MiniLM
-- Created FAISS vector index
-- Implemented global semantic retrieval
-- Implemented product-specific semantic retrieval
-- Built RAG service for structured evidence extraction
-- Integrated ML prediction + RAG evidence in analysis service
+SentimentAgent — global + aspect sentiment
 
-Current analyst output:
-- product metadata
-- predicted price class
-- retrieved supporting review evidence
+TopicAgent — pain‑point detection + theme extraction
 
-Saved artifacts:
-- `artifacts/models/price_class_model.joblib`
-- `artifacts/models/price_class_label_encoder.joblib`
-- `artifacts/models/price_class_model_with_text.joblib`
-- `artifacts/models/price_class_label_encoder_with_text.joblib`
+RetrievalAgent — RAG over review embeddings
 
-## Evaluation Layer
+ImageRetrievalAgent — multimodal similarity
 
-Implemented:
-- Agent pipeline evaluation
-- Retrieval quality checks
-- Report alignment checks
+CounterfactualAgent — “what would improve this product?”
 
-Evaluation scripts:
-- `python -m app.evaluation.agent_eval`
-- `python -m app.evaluation.rag_eval`
-- `python -m app.evaluation.report_eval`
-- `python -m app.evaluation.run_all_eval`
+ReportAgent — final structured report
 
-## Current Status
-✅ Phase 1 complete  
-✅ Phase 2 complete  
-🔄 Phase 3 next: RAG pipeline for evidence retrieval and explanation
+GuardrailAgent — safety + hallucination checks
 
-## How to Run
+CriticAgent — evaluates agent outputs
 
-### Phase 1 preprocessing
-```bash
-python -m app.data.preprocessing.clean_reviews
-python -m app.data.preprocessing.clean_metadata
-python -m app.data.preprocessing.merge_data
-python -m app.data.preprocessing.build_features
-python -m app.data.preprocessing.create_labels
+All orchestrated through a robust, fault‑tolerant pipeline.
+
+🧩 System Architecture
+High‑Level Overview
+Code
+                ┌──────────────────────────┐
+                │        Streamlit UI       │
+                └──────────────┬───────────┘
+                               │
+                               ▼
+                    ┌───────────────────┐
+                    │      FastAPI      │
+                    │   Multi‑Agent     │
+                    └─────────┬─────────┘
+                              │
+     ┌────────────────────────┼────────────────────────┐
+     ▼                        ▼                        ▼
+Redis Cache            Qdrant Vector DB         OpenTelemetry
+Caching, rate‑limiting   Embeddings + RAG       Traces + Metrics
+🛠️ Tech Stack
+Backend
+FastAPI
+
+Python 3.12
+
+Pydantic
+
+Async orchestration
+
+OpenTelemetry instrumentation
+
+Frontend
+Streamlit
+
+Real‑time product analysis dashboard
+
+AI / ML
+LLM‑based agents
+
+RAG with Qdrant
+
+Sentiment + aspect sentiment
+
+Topic modeling
+
+Counterfactual reasoning
+
+Infrastructure
+Docker
+
+Kubernetes (Deployments, StatefulSets, Services, Ingress)
+
+Redis (cache)
+
+Qdrant (vector DB)
+
+GitHub Actions CI/CD
+
+📦 Project Structure
+Code
+app/
+  ├── api/
+  │   ├── main.py
+  │   ├── routers/
+  │   └── services/
+  ├── agents/
+  │   ├── planning_agent.py
+  │   ├── data_agent.py
+  │   ├── sentiment_agent.py
+  │   ├── topic_agent.py
+  │   ├── retrieval_agent.py
+  │   ├── report_agent.py
+  │   └── ...
+  ├── core/
+  ├── models/
+  ├── utils/
+  └── ui/
+      └── streamlit_app.py
+k8s/
+  ├── api-deployment.yaml
+  ├── api-service.yaml
+  ├── streamlit-deployment.yaml
+  ├── streamlit-service.yaml
+  ├── redis-deployment.yaml
+  ├── redis-service.yaml
+  ├── qdrant-statefulset.yaml
+  ├── qdrant-service.yaml
+  ├── ingress.yaml
+  ├── configmap.yaml
+  └── secret.yaml
+🐳 Running Locally (Docker Compose)
+bash
+docker-compose up --build
+Services:
+
+API → http://localhost:8000
+
+Streamlit UI → http://localhost:8501
+
+Redis → localhost:6379
+
+Qdrant → http://localhost:6333
+
+☸️ Kubernetes Deployment
+Apply all manifests:
+
+bash
+kubectl apply -f k8s/
+Access the UI via Ingress:
+Code
+https://ui.yourdomain.com
+Access the API:
+Code
+https://api.yourdomain.com
+🔐 Environment Variables
+ConfigMap (ecommerce-config)
+ENV
+
+LOG_LEVEL
+
+REDIS_URL
+
+QDRANT_URL
+
+METRICS_PORT
+
+RATE_LIMIT_PER_MINUTE
+
+OTEL_*
+
+Secret (ecommerce-secrets)
+OPENAI_API_KEY
+
+QDRANT_API_KEY
+
+API_KEY
+
+📊 Observability
+The system includes:
+
+OpenTelemetry tracing
+
+Metrics endpoint
+
+Health, readiness, and liveness probes
+
+Distributed tracing across agents
+
+You can plug this into:
+
+Grafana
+
+Tempo
+
+Prometheus
+
+Jaeger
+
+🧪 Testing
+Run unit tests:
+
+bash
+pytest -q
+📈 Roadmap
+[ ] Add multi‑product batch analysis
+
+[ ] Add user authentication
+
+[ ] Add product comparison agent
+
+[ ] Add fine‑tuned embedding model
+
+[ ] Add GPU support for inference
+
+🤝 Contributing
+Pull requests are welcome.
+Please open an issue first to discuss major changes.
+
+📄 License
+MIT License.
+
+🙌 Acknowledgements
+This project integrates:
+
+Qdrant (vector search)
+
+Redis (caching)
+
+Streamlit (UI)
+
+FastAPI (backend)
+
+OpenTelemetry (observability)

@@ -2,11 +2,18 @@ apiVersion: v1
 kind: Service
 metadata:
   name: qdrant-service
+  labels:
+    app: qdrant
+    component: vector-db
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "6333"
 spec:
   selector:
     app: qdrant
   ports:
-    - protocol: TCP
+    - name: http
+      protocol: TCP
       port: 6333
       targetPort: 6333
   type: ClusterIP

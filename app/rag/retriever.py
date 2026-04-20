@@ -4,9 +4,12 @@ import faiss
 import numpy as np
 import pandas as pd
 from sentence_transformers import SentenceTransformer
+from app.logging.logger import get_logger
+from app.observability.tracing import get_tracer
 
+logger = get_logger("rag.review_retriever")
 
-MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+_MODEL = None  # Singleton model
 
 
 class ReviewRetriever:
@@ -15,34 +18,63 @@ class ReviewRetriever:
         index_path: str = "artifacts/indexes/review_faiss.index",
         metadata_path: str = "artifacts/embeddings/review_embedding_metadata.csv",
         embeddings_path: str = "artifacts/embeddings/review_embeddings.npy",
-        model_name: str = MODEL_NAME,
+        model_name: str = "sentence-transformers/all-MiniLM-L6-v2",
     ) -> None:
+
         self.index = faiss.read_index(index_path)
         self.metadata = pd.read_csv(metadata_path)
         self.embeddings = np.load(embeddings_path).astype("float32")
-        self.model = SentenceTransformer(model_name)
+
+        if self.embeddings.ndim != 2:
+            raise ValueError("Embeddings must be a 2D array [num_vectors, dim]")
+
+        if np.isnan(self.embeddings).any():
+            raise ValueError("Embeddings contain NaN values")
+
+        if self.index.ntotal != len(self.metadata):
+            raise ValueError("FAISS index size does not match metadata row count")
+
+        global _MODEL
+        if _MODEL is None:
+            _MODEL = SentenceTransformer(model_name)
+
+        self.model = _MODEL
+        self.tracer = get_tracer("app.review_retriever")
 
     def embed_query(self, query: str) -> np.ndarray:
-        query_vector = self.model.encode(
+        if not isinstance(query, str) or not query.strip():
+            raise ValueError("ReviewRetriever: query must be a non-empty string")
+
+        vector = self.model.encode(
             [query],
             convert_to_numpy=True,
             normalize_embeddings=True,
         ).astype("float32")
-        return query_vector
+
+        return vector
 
     def search(self, query: str, top_k: int = 5) -> pd.DataFrame:
-        query_vector = self.embed_query(query)
+        if not isinstance(top_k, int) or top_k <= 0:
+            raise ValueError("ReviewRetriever: top_k must be a positive integer")
 
-        scores, indices = self.index.search(query_vector, top_k)
-        top_scores = scores[0]
-        top_indices = indices[0]
+        with self.tracer.start_as_current_span("faiss.search"):
+            query_vector = self.embed_query(query)
 
-        results = self.metadata.iloc[top_indices].copy()
-        results["score"] = top_scores
+            try:
+                scores, indices = self.index.search(query_vector, top_k)
+            except Exception:
+                logger.error("FAISS search failed", exc_info=True)
+                raise
 
-        return results.reset_index(drop=True)
+            results = self.metadata.iloc[indices[0]].copy()
+            results["score"] = scores[0]
+
+            return results.reset_index(drop=True)
 
     def search_by_product(self, product_id: str, query: str, top_k: int = 5) -> pd.DataFrame:
+        if not isinstance(product_id, str):
+            raise ValueError("ReviewRetriever: product_id must be a string")
+
         query_vector = self.embed_query(query)
 
         product_mask = self.metadata["product_id"].astype(str) == str(product_id)
@@ -64,22 +96,3 @@ class ReviewRetriever:
         results["score"] = top_scores
 
         return results.reset_index(drop=True)
-
-
-if __name__ == "__main__":
-    retriever = ReviewRetriever()
-
-    print("\n=== Global Retrieval ===")
-    global_query = "premium wireless noise cancelling headphones with great sound quality"
-    global_results = retriever.search(query=global_query, top_k=5)
-    print(global_results[["product_id", "title", "categories", "review_text", "score"]])
-
-    print("\n=== Product-Specific Retrieval ===")
-    sample_product_id = global_results.iloc[0]["product_id"]
-    product_query = "sound quality and noise cancellation"
-    product_results = retriever.search_by_product(
-        product_id=sample_product_id,
-        query=product_query,
-        top_k=3,
-    )
-    print(product_results[["product_id", "title", "review_text", "score"]])

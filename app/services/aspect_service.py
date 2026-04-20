@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 from app.services.rag_service import RAGService
+from app.logging.logger import get_logger
+from app.observability.tracing import get_tracer
+
+logger = get_logger("aspect.service")
 
 
 class AspectService:
@@ -15,26 +19,33 @@ class AspectService:
 
     def __init__(self) -> None:
         self.rag_service = RAGService()
+        self.tracer = get_tracer("app.aspect_service")
 
     def get_aspect_evidence(self, product_id: str, top_k: int = 3) -> dict[str, list[dict]]:
+        if not isinstance(product_id, str) or not product_id.strip():
+            raise ValueError("product_id must be a non-empty string")
+
+        if not isinstance(top_k, int) or top_k <= 0:
+            raise ValueError("top_k must be a positive integer")
+
         aspect_results: dict[str, list[dict]] = {}
 
-        for aspect, query in self.ASPECT_QUERIES.items():
-            evidence = self.rag_service.get_product_evidence(
-                product_id=product_id,
-                query=query,
-                top_k=top_k,
-            )
-            aspect_results[aspect] = evidence
+        with self.tracer.start_as_current_span("aspect_service.get_aspect_evidence") as span:
+            span.set_attribute("product_id", product_id)
+            span.set_attribute("top_k", top_k)
+
+            for aspect, query in self.ASPECT_QUERIES.items():
+                try:
+                    evidence = self.rag_service.get_product_evidence(
+                        product_id=product_id,
+                        query=query,
+                        top_k=top_k,
+                    )
+                except Exception:
+                    logger.error(f"RAG retrieval failed for aspect '{aspect}'", exc_info=True)
+                    evidence = []
+
+                aspect_results[aspect] = evidence
+                span.set_attribute(f"{aspect}_count", len(evidence))
 
         return aspect_results
-
-
-if __name__ == "__main__":
-    service = AspectService()
-    result = service.get_aspect_evidence(product_id="B09SPZPDJK", top_k=2)
-
-    for aspect, evidence in result.items():
-        print(f"\n=== {aspect.upper()} ===")
-        for item in evidence:
-            print(item.get("review_title", ""), "->", item.get("score", 0))

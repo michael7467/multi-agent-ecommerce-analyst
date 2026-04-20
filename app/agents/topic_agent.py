@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 from pathlib import Path
-
 import pandas as pd
 
 from app.agents.base_agent import BaseAgent
-
+from app.logging.logger import get_logger
+from app.observability.agent_tracing import traced_agent
 
 TOPIC_KEYWORDS_PATH = Path("artifacts/topic_modeling/topic_keywords_global.csv")
-
+logger = get_logger("agents.topic")
 
 class TopicAgent(BaseAgent):
     def __init__(self, topic_keywords_path: str | Path = TOPIC_KEYWORDS_PATH) -> None:
@@ -20,12 +20,19 @@ class TopicAgent(BaseAgent):
                 f"Topic keywords file not found: {self.topic_keywords_path}"
             )
 
-        self.topic_df = pd.read_csv(self.topic_keywords_path)
+        try:
+            self.topic_df = pd.read_csv(self.topic_keywords_path)
+        except Exception:
+            logger.error(f"{self.name}: failed to load topic keywords", exc_info=True)
+            raise
+
+        required_cols = ["topic_id", "topic_name", "count", "keywords"]
+        for col in required_cols:
+            if col not in self.topic_df.columns:
+                raise RuntimeError(f"TopicAgent: missing column '{col}' in topic CSV")
 
         # remove BERTopic outlier topic
-        if "topic_id" in self.topic_df.columns:
-            self.topic_df = self.topic_df[self.topic_df["topic_id"] != -1].copy()
-
+        self.topic_df = self.topic_df[self.topic_df["topic_id"] != -1].copy()
         self.topic_df = self.topic_df.reset_index(drop=True)
 
     def _extract_pain_points(self, df: pd.DataFrame, top_k: int = 5) -> list[dict]:
@@ -36,40 +43,42 @@ class TopicAgent(BaseAgent):
             "slow", "fail", "failed"
         ]
 
-        pain_points = []
-        for _, row in df.iterrows():
-            keywords = str(row.get("keywords", "")).lower()
-            if any(term in keywords for term in pain_keywords):
-                pain_points.append(
-                    {
-                        "topic_id": int(row["topic_id"]),
-                        "topic_name": row.get("topic_name", ""),
-                        "count": int(row.get("count", 0)),
-                        "keywords": row.get("keywords", ""),
-                    }
-                )
+        df = df.copy()
+        df["is_pain"] = df["keywords"].str.lower().apply(
+            lambda kw: any(term in kw for term in pain_keywords)
+        )
 
-            if len(pain_points) >= top_k:
-                break
+        pain_df = df[df["is_pain"]].sort_values(by="count", ascending=False)
 
-        return pain_points
+        return [
+            {
+                "topic_id": int(row["topic_id"]),
+                "topic_name": row.get("topic_name", ""),
+                "count": int(row.get("count", 0)),
+                "keywords": row.get("keywords", ""),
+            }
+            for _, row in pain_df.head(top_k).iterrows()
+        ]
 
+    @traced_agent
     def run(self, top_k: int = 5) -> dict:
+        if not isinstance(top_k, int) or top_k <= 0:
+            raise ValueError("TopicAgent: top_k must be a positive integer")
+
         df = self.topic_df.copy()
 
         if "count" in df.columns:
             df = df.sort_values(by="count", ascending=False)
 
-        top_themes = []
-        for _, row in df.head(top_k).iterrows():
-            top_themes.append(
-                {
-                    "topic_id": int(row["topic_id"]),
-                    "topic_name": row.get("topic_name", ""),
-                    "count": int(row.get("count", 0)),
-                    "keywords": row.get("keywords", ""),
-                }
-            )
+        top_themes = [
+            {
+                "topic_id": int(row["topic_id"]),
+                "topic_name": row.get("topic_name", ""),
+                "count": int(row.get("count", 0)),
+                "keywords": row.get("keywords", ""),
+            }
+            for _, row in df.head(top_k).iterrows()
+        ]
 
         pain_points = self._extract_pain_points(df, top_k=top_k)
 
@@ -77,16 +86,3 @@ class TopicAgent(BaseAgent):
             "top_themes": top_themes,
             "pain_points": pain_points,
         }
-
-
-if __name__ == "__main__":
-    agent = TopicAgent()
-    result = agent.run(top_k=5)
-
-    print("\n=== TOP THEMES ===\n")
-    for item in result["top_themes"]:
-        print(item)
-
-    print("\n=== PAIN POINTS ===\n")
-    for item in result["pain_points"]:
-        print(item)

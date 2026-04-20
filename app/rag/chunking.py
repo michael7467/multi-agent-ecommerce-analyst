@@ -2,12 +2,21 @@ from __future__ import annotations
 
 from pathlib import Path
 import pandas as pd
+from app.logging.logger import get_logger
+from app.observability.agent_tracing import traced_function
 
+logger = get_logger("rag.review_chunk_builder")
 
 class ReviewChunkBuilder:
     def __init__(self, df: pd.DataFrame) -> None:
         self.df = df.copy()
 
+        required = ["product_id", "review_text"]
+        for col in required:
+            if col not in self.df.columns:
+                raise ValueError(f"ReviewChunkBuilder: missing required column '{col}'")
+
+    @traced_function
     def build_documents(self) -> pd.DataFrame:
         df = self.df.copy()
 
@@ -16,14 +25,20 @@ class ReviewChunkBuilder:
             if col in df.columns:
                 df[col] = df[col].fillna("").astype(str).str.strip()
 
-        # Build one text field for retrieval
+        # Build unified retrieval text
         df["document_text"] = (
-            "Product Title: " + df.get("title", pd.Series("", index=df.index)) + "\n"
-            + "Categories: " + df.get("categories", pd.Series("", index=df.index)) + "\n"
-            + "Review Title: " + df.get("review_title", pd.Series("", index=df.index)) + "\n"
-            + "Review Text: " + df.get("review_text", pd.Series("", index=df.index)) + "\n"
-            + "Description: " + df.get("description", pd.Series("", index=df.index))
+            "[PRODUCT]\n"
+            "Title: " + df.get("title", "") + "\n"
+            "Categories: " + df.get("categories", "") + "\n\n"
+            "[REVIEW]\n"
+            "Title: " + df.get("review_title", "") + "\n"
+            "Text: " + df.get("review_text", "") + "\n\n"
+            "[DESCRIPTION]\n"
+            + df.get("description", "")
         )
+
+        # Normalize whitespace
+        df["document_text"] = df["document_text"].str.replace(r"\n+", "\n", regex=True)
 
         keep_cols = [
             "product_id",
@@ -39,7 +54,7 @@ class ReviewChunkBuilder:
         available_cols = [col for col in keep_cols if col in df.columns]
         docs = df[available_cols].copy()
 
-        # Remove duplicates
+        # Deduplicate
         dedupe_cols = [col for col in ["product_id", "review_text"] if col in docs.columns]
         if dedupe_cols:
             docs = docs.drop_duplicates(subset=dedupe_cols)
@@ -62,15 +77,8 @@ def save_review_documents(
 
     print(f"Saved review documents to: {output_path}")
     print(f"Shape: {docs_df.shape}")
-
-    print("\nColumns:")
-    print(docs_df.columns.tolist())
-
+    print("\nColumns:", docs_df.columns.tolist())
     print("\nSample:")
     print(docs_df.head())
 
     return docs_df
-
-
-if __name__ == "__main__":
-    save_review_documents()

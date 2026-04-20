@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 from pathlib import Path
-
 import numpy as np
 import pandas as pd
 from qdrant_client import QdrantClient, models
 from app.rag.qdrant_client_manager import get_qdrant_client
+from app.logging.logger import get_logger
+from app.observability.agent_tracing import traced_function
+
+logger = get_logger("qdrant.index_builder")
 
 EMBEDDINGS_PATH = Path("artifacts/embeddings/review_embeddings.npy")
 METADATA_PATH = Path("artifacts/embeddings/review_embedding_metadata.csv")
-QDRANT_STORAGE_PATH = Path("artifacts/qdrant_storage")
 COLLECTION_NAME = "review_embeddings"
 
 
@@ -30,32 +32,17 @@ class QdrantIndexBuilder:
         )
 
     def upload_points(self, embeddings: np.ndarray, metadata_df: pd.DataFrame) -> None:
-        points = []
+        payloads = metadata_df.to_dict(orient="records")
+        ids = list(range(len(metadata_df)))
 
-        for idx, (_, row) in enumerate(metadata_df.iterrows()):
-            payload = {
-                "product_id": str(row.get("product_id", "")),
-                "rating": float(row.get("rating", 0.0)) if pd.notna(row.get("rating")) else None,
-                "review_title": str(row.get("review_title", "")),
-                "review_text": str(row.get("review_text", "")),
-                "title": str(row.get("title", "")),
-                "categories": str(row.get("categories", "")),
-                "description": str(row.get("description", "")),
-            }
-
-            points.append(
-                models.PointStruct(
-                    id=idx,
-                    vector=embeddings[idx].tolist(),
-                    payload=payload,
-                )
-            )
-
-        self.client.upsert(
+        self.client.upload_collection(
             collection_name=COLLECTION_NAME,
-            points=points,
+            vectors=embeddings,
+            payload=payloads,
+            ids=ids,
         )
 
+    @traced_function
     def build(self) -> None:
         if not EMBEDDINGS_PATH.exists():
             raise FileNotFoundError(f"Missing embeddings file: {EMBEDDINGS_PATH}")
@@ -65,27 +52,28 @@ class QdrantIndexBuilder:
         embeddings = np.load(EMBEDDINGS_PATH).astype("float32")
         metadata_df = pd.read_csv(METADATA_PATH)
 
+        if embeddings.ndim != 2:
+            raise ValueError("Embeddings must be a 2D array [num_vectors, dim]")
+
+        if np.isnan(embeddings).any():
+            raise ValueError("Embeddings contain NaN values")
+
         if len(embeddings) != len(metadata_df):
             raise ValueError(
                 f"Embeddings count ({len(embeddings)}) does not match metadata count ({len(metadata_df)})"
             )
 
+        # Normalize for cosine similarity
+        embeddings /= np.linalg.norm(embeddings, axis=1, keepdims=True)
+
         vector_size = embeddings.shape[1]
         self.create_or_replace_collection(vector_size=vector_size)
         self.upload_points(embeddings=embeddings, metadata_df=metadata_df)
 
-        print(f"Built Qdrant collection: {COLLECTION_NAME}")
-        print(f"Stored points: {len(metadata_df)}")
-        print(f"Vector size: {vector_size}")
-        print(f"Storage path: {QDRANT_STORAGE_PATH}")
+        logger.info(
+            f"Built Qdrant collection '{COLLECTION_NAME}' "
+            f"with {len(metadata_df)} points (dim={vector_size})"
+        )
 
     def close(self) -> None:
         self.client.close()
-
-
-if __name__ == "__main__":
-    builder = QdrantIndexBuilder()
-    try:
-        builder.build()
-    finally:
-        builder.close()

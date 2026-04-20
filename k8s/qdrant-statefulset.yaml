@@ -13,14 +13,48 @@ spec:
       labels:
         app: qdrant
     spec:
+      securityContext:
+        fsGroup: 1000
       containers:
         - name: qdrant
           image: qdrant/qdrant:latest
           ports:
             - containerPort: 6333
+          env:
+            - name: QDRANT__STORAGE__STORAGE_PATH
+              value: "/qdrant/storage"
+            - name: QDRANT__LOG_LEVEL
+              value: "INFO"
+
           volumeMounts:
             - name: qdrant-storage
               mountPath: /qdrant/storage
+
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 6333
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 6333
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"
 
   volumeClaimTemplates:
     - metadata:

@@ -12,12 +12,23 @@ spec:
       labels:
         app: ecommerce-streamlit
     spec:
+      securityContext:
+        fsGroup: 1000
+
       containers:
         - name: streamlit
-          image: multi-agent-ecommerce-analyst-streamlit:v4
+          image: ghcr.io/YOUR_USERNAME/multi-agent-ecommerce-analyst-streamlit:v4
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8501
+
+          envFrom:
+            - configMapRef:
+                name: ecommerce-config
+            - secretRef:
+                name: ecommerce-secrets
+
+          # Override only what differs from config
           env:
             - name: REDIS_URL
               value: redis://redis-service:6379/0
@@ -43,3 +54,13 @@ spec:
             periodSeconds: 20
             timeoutSeconds: 3
             failureThreshold: 3
+
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+
+      restartPolicy: Always

@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: api
-          image: ghcr.io/YOUR_USERNAME/multi-agent-ecommerce-analyst-api:v5
+          image: ghcr.io/YOUR_USERNAME/multi-agent-ecommerce-analyst-api:latest
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000

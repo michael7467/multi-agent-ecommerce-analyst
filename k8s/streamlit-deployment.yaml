@@ -17,7 +17,7 @@ spec:
 
       containers:
         - name: streamlit
-          image: ghcr.io/YOUR_USERNAME/multi-agent-ecommerce-analyst-streamlit:v4
+          image: ghcr.io/YOUR_USERNAME/multi-agent-ecommerce-analyst-streamlit:latest
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8501

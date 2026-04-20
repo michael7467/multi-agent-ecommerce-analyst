@@ -1,0 +1,13 @@
+pandas
+numpy
+scikit-learn
+pydantic
+fastapi
+uvicorn[standard]
+redis
+qdrant-client
+prometheus-client
+opentelemetry-api
+opentelemetry-sdk
+opentelemetry-exporter-otlp
+python-dotenv

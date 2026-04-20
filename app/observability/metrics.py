@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from prometheus_client import Counter, Gauge, Histogram, start_http_server
 
+from app.core.config import settings
 
 _METRICS_STARTED = False
 
@@ -60,7 +61,7 @@ IN_PROGRESS_ANALYSIS = Gauge(
 )
 
 
-def setup_metrics(port: int = 8001) -> None:
+def setup_metrics(port=settings.metrics_port) -> None:
     global _METRICS_STARTED
 
     if _METRICS_STARTED:
@@ -68,3 +69,4 @@ def setup_metrics(port: int = 8001) -> None:
 
     start_http_server(port)
     _METRICS_STARTED = True
+

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from app.agents.base_agent import BaseAgent
 from app.services.aspect_sentiment_service import AspectSentimentService
-
+from app.core.config import settings
 
 class AspectSentimentAgent(BaseAgent):
     def __init__(self, backend: str = "zero_shot") -> None:
@@ -18,7 +18,7 @@ class AspectSentimentAgent(BaseAgent):
 
 
 if __name__ == "__main__":
-    agent = AspectSentimentAgent(backend="zero_shot")
+    agent = AspectSentimentAgent(backend=settings.aspect_sentiment_backend)
     result = agent.run(product_id="B09SPZPDJK", top_k=2)
 
     print("\n=== ASPECT SENTIMENT ===\n")

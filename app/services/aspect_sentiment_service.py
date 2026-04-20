@@ -6,7 +6,7 @@ from transformers import pipeline
 
 from app.models.llm.llm_client import LLMClient
 from app.services.aspect_service import AspectService
-
+from app.core.config import settings
 
 AspectBackend = Literal["zero_shot", "llm"]
 
@@ -22,7 +22,7 @@ class AspectSentimentService:
                 model="facebook/bart-large-mnli",
             )
         elif backend == "llm":
-            self.llm = LLMClient(model="gpt-4.1-mini")
+            self.llm = LLMClient(model=settings.llm_model)
         else:
             raise ValueError(f"Unsupported backend: {backend}")
 

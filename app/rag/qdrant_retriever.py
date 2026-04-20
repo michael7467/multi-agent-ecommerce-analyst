@@ -7,10 +7,10 @@ from sentence_transformers import SentenceTransformer
 from app.observability.metrics import RETRIEVAL_LATENCY_SECONDS, RETRIEVAL_REQUESTS_TOTAL
 from app.observability.tracing import get_tracer
 from app.rag.qdrant_client_manager import get_qdrant_client
+from app.core.config import settings
 
-
-COLLECTION_NAME = "review_embeddings"
-EMBED_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+COLLECTION_NAME = settings.qdrant_collection_name
+EMBED_MODEL_NAME = settings.embedding_model_name
 
 
 class QdrantRetriever:

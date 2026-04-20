@@ -26,7 +26,9 @@ from app.observability.metrics import (
     IN_PROGRESS_ANALYSIS,
     REPORT_LATENCY_SECONDS,
 )
-
+from app.agents.buy_decision_agent import BuyDecisionAgent
+from app.agents.competitive_agent import CompetitiveAgent
+from app.agents.trend_agent import TrendAgent
 
 class DynamicOrchestrator:
     def __init__(self) -> None:
@@ -47,6 +49,9 @@ class DynamicOrchestrator:
         self.counterfactual_agent = CounterfactualAgent()
         self.cache_service = CacheService()
         self.tracer = get_tracer("app.dynamic_orchestrator")
+        self.competitive_agent = CompetitiveAgent()
+        self.buy_decision_agent = BuyDecisionAgent()
+        self.trend_agent = TrendAgent()
 
     def run(self, product_id: str, query: str, top_k: int = 3) -> dict:
         ANALYSIS_REQUESTS_TOTAL.inc()
@@ -93,7 +98,13 @@ class DynamicOrchestrator:
                         }
 
                         product_data = {}
-
+                        if plan.get("use_competitive", False):
+                            with self.tracer.start_as_current_span("competitive_agent.run"):
+                                competitive_result = self.competitive_agent.run(
+                                    product_id=product_id,
+                                    top_k=5,
+                                )
+                                analysis_result["competitive_analysis"] = competitive_result["competitive_analysis"]
                         if plan.get("use_data", False):
                             with self.tracer.start_as_current_span("data_agent.run"):
                                 product_data = self.data_agent.run(product_id=product_id)
@@ -104,13 +115,23 @@ class DynamicOrchestrator:
                                         "price": product_data.get("price", None),
                                     }
                                 )
-
+                        if plan.get("use_buy_decision", False):
+                            with self.tracer.start_as_current_span("buy_decision_agent.run"):
+                                buy_decision_result = self.buy_decision_agent.run(
+                                    analysis_result=analysis_result
+                                )
+                                analysis_result["buy_decision"] = buy_decision_result["buy_decision"]
                         if plan.get("use_topics", False):
                             with self.tracer.start_as_current_span("topic_agent.run"):
                                 topic_result = self.topic_agent.run(top_k=5)
                                 analysis_result["top_themes"] = topic_result["top_themes"]
                                 analysis_result["pain_points"] = topic_result["pain_points"]
 
+                        if plan.get("use_trends", False):
+                            with self.tracer.start_as_current_span("trend_agent.run"):
+                                trend_result = self.trend_agent.run()
+                                analysis_result["trend_analysis"] = trend_result["trend_analysis"]
+                                
                         if plan.get("use_aspect_sentiment", False):
                             with self.tracer.start_as_current_span("aspect_sentiment_agent.run"):
                                 aspect_sentiment_result = self.aspect_sentiment_agent.run(

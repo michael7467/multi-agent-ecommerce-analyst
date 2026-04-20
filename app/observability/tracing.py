@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-
+from app.core.config import settings
 from opentelemetry import trace
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
@@ -22,8 +22,8 @@ def setup_tracing() -> None:
     if _TRACING_INITIALIZED:
         return
 
-    service_name = os.getenv("OTEL_SERVICE_NAME", "multi-agent-ecommerce-analyst")
-    exporter_mode = os.getenv("OTEL_TRACES_EXPORTER_MODE", "console").lower()
+    service_name = settings.otel_service_name
+    exporter_mode = settings.otel_traces_exporter_mode
 
     resource = Resource.create(
         {

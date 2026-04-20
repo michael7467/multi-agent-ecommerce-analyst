@@ -1,0 +1,6 @@
+-r requirements-base.txt
+streamlit
+plotly
+altair
+torch
+torchvision

@@ -4,10 +4,11 @@ WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
 
-COPY requirements.txt /app/requirements.txt
+COPY requirements-base.txt requirements-streamlit.txt requirements-api.txt requirements-ml.txt /app/
 RUN pip install --upgrade pip && \
-    pip install --no-cache-dir --default-timeout=1000 -r requirements.txt
+    pip install --no-cache-dir --default-timeout=1000 -r requirements-streamlit.txt -r requirements-api.txt -r requirements-ml.txt
 
 COPY . /app
 

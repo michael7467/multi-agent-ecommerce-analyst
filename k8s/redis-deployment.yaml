@@ -17,3 +17,15 @@ spec:
           image: redis:7
           ports:
             - containerPort: 6379
+
+          readinessProbe:
+            tcpSocket:
+              port: 6379
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+          livenessProbe:
+            tcpSocket:
+              port: 6379
+            initialDelaySeconds: 10
+            periodSeconds: 20

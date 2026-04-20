@@ -7,9 +7,9 @@ from app.agents.dynamic_orchestrator import DynamicOrchestrator
 from app.observability.metrics import setup_metrics
 from app.observability.tracing import setup_tracing
 
-
+from app.core.config import settings
 setup_tracing()
-setup_metrics(port=8001)
+setup_metrics(port=settings.metrics_port)
 
 st.set_page_config(
     page_title="Multi-Agent E-commerce AI Analyst",
@@ -349,6 +349,134 @@ def render_counterfactuals(output: dict) -> None:
 def render_raw_output(output: dict) -> None:
     st.subheader("Raw Output")
     st.json(output)
+def render_competitive_analysis(output: dict) -> None:
+    st.subheader("Competitive Intelligence")
+
+    data = output.get("competitive_analysis", {})
+    if not data:
+        st.info("No competitive analysis available.")
+        return
+
+    base = data.get("base_product", {})
+    competitors = data.get("competitors", [])
+    insights = data.get("insights", [])
+
+    st.write("**Base Product**")
+    st.write(f"**Title:** {base.get('title', '')}")
+    st.write(f"**Price:** {base.get('price', 'N/A')}")
+    st.write(f"**Predicted Class:** {str(base.get('predicted_class', '')).upper()}")
+    st.write(f"**Average Sentiment:** {base.get('avg_sentiment', 'N/A')}")
+
+    st.markdown("---")
+    st.write("**Top Competitors**")
+
+    if not competitors:
+        st.info("No competitors available.")
+    else:
+        for i, comp in enumerate(competitors, start=1):
+            with st.expander(f"Competitor {i}: {comp.get('title', '')}"):
+                st.write(f"**Product ID:** {comp.get('product_id', '')}")
+                st.write(f"**Price:** {comp.get('price', 'N/A')}")
+                st.write(f"**Predicted Class:** {str(comp.get('predicted_class', '')).upper()}")
+                st.write(f"**Average Sentiment:** {comp.get('avg_sentiment', 'N/A')}")
+                st.write(f"**Similarity Score:** {comp.get('similarity_score', 0.0):.4f}")
+
+    st.markdown("---")
+    st.write("**Key Insights**")
+
+    if not insights:
+        st.info("No competitive insights available.")
+    else:
+        for insight in insights:
+            st.write(f"- {insight}")
+def render_buy_decision(output: dict) -> None:
+    st.subheader("Should You Buy It?")
+
+    decision = output.get("buy_decision", {})
+    if not decision:
+        st.info("No buy decision available.")
+        return
+
+    st.write(f"**Decision:** {decision.get('decision', '').upper()}")
+    st.write(f"**Summary:** {decision.get('summary', '')}")
+
+    pros = decision.get("pros", [])
+    cons = decision.get("cons", [])
+    recommended_for = decision.get("recommended_for", [])
+    not_recommended_for = decision.get("not_recommended_for", [])
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.write("**Pros**")
+        for item in pros:
+            st.write(f"- {item}")
+
+        st.write("**Recommended For**")
+        for item in recommended_for:
+            st.write(f"- {item}")
+
+    with col2:
+        st.write("**Cons**")
+        for item in cons:
+            st.write(f"- {item}")
+
+        st.write("**Not Recommended For**")
+        for item in not_recommended_for:
+            st.write(f"- {item}")
+def render_trend_analysis(output: dict) -> None:
+    st.subheader("Trend Detection")
+
+    trend_data = output.get("trend_analysis", {})
+    if not trend_data:
+        st.info("No trend analysis available.")
+        return
+
+    rising = trend_data.get("rising_categories", [])
+    declining = trend_data.get("declining_categories", [])
+    complaints = trend_data.get("emerging_complaints", [])
+    seasonal = trend_data.get("seasonal_patterns", [])
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.write("**Rising Categories**")
+        if rising:
+            for item in rising:
+                st.write(
+                    f"- {item['category']} (trend score: {item['trend_score']:.2f})"
+                )
+        else:
+            st.write("No rising categories detected.")
+
+        st.write("**Emerging Complaints**")
+        if complaints:
+            for item in complaints:
+                st.write(
+                    f"- {item['complaint']} (trend score: {item['trend_score']:.2f})"
+                )
+        else:
+            st.write("No emerging complaints detected.")
+
+    with col2:
+        st.write("**Declining Categories**")
+        if declining:
+            for item in declining:
+                st.write(
+                    f"- {item['category']} (trend score: {item['trend_score']:.2f})"
+                )
+        else:
+            st.write("No declining categories detected.")
+
+        st.write("**Seasonal Patterns**")
+        if seasonal:
+            for item in seasonal:
+                st.write(
+                    f"- {item['category']} peaks in month {item['peak_month']} "
+                    f"(count: {item['peak_review_count']})"
+                )
+        else:
+            st.write("No seasonal patterns detected.")
 
 
 def main() -> None:
@@ -430,7 +558,15 @@ def main() -> None:
             if "counterfactuals" in output:
                 render_counterfactuals(output)
                 st.markdown("---")
-
+            if "competitive_analysis" in output:
+                render_competitive_analysis(output)
+                st.markdown("---")
+            if "buy_decision" in output:
+                render_buy_decision(output)
+                st.markdown("---")
+            if "trend_analysis" in output:
+                render_trend_analysis(output)
+                st.markdown("---")
             if show_raw_output:
                 render_raw_output(output)
 

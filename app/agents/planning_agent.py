@@ -70,7 +70,10 @@ class PlanningAgent(BaseAgent):
     "use_counterfactuals": false,
     "use_report": true,
     "use_guardrail": false,
-    "use_critic": false
+    "use_critic": false,
+    "use_competitive": False,
+    "use_buy_decision": False,
+    "use_trends": False,
     }}
     """.strip()
     def _safe_default_plan(self) -> dict:
@@ -88,6 +91,9 @@ class PlanningAgent(BaseAgent):
             "use_critic": False,
             "use_topics": False,
             "use_counterfactuals": False,
+            "use_competitive": False,
+            "use_buy_decision": False,
+            "use_trends": False,
         }
 
     def _normalize_plan(self, plan: dict) -> dict:
@@ -161,7 +167,56 @@ class PlanningAgent(BaseAgent):
                 "how could",
                 "what would need to change",
             ]
+        competitive_terms = [
+            "compare",
+            "competitor",
+            "competitors",
+            "vs",
+            "versus",
+            "alternative",
+            "alternatives",
+            "tradeoff",
+            "tradeoffs",
+            "strengths",
+            "weaknesses",
+            "price performance",
+        ]
+        buy_terms = [
+            "should i buy",
+            "should you buy",
+            "buy it",
+            "worth buying",
+            "is it worth it",
+            "recommend this product",
+            "would you recommend",
+        ]
+        trend_terms = [
+            "trend",
+            "trends",
+            "rising categories",
+            "declining categories",
+            "emerging complaints",
+            "seasonal",
+            "seasonality",
+            "market trend",
+            "category trend",
+        ]
 
+        if any(term in q for term in trend_terms):
+            plan["use_trends"] = True
+            plan["use_report"] = True
+        if any(term in q for term in buy_terms):
+            plan["use_buy_decision"] = True
+            plan["use_sentiment"] = True
+            plan["use_aspect_sentiment"] = True
+            plan["use_retrieval"] = True
+            plan["use_forecast"] = True
+            plan["use_recommender"] = True
+            plan["use_report"] = True
+        if any(term in q for term in competitive_terms):
+            plan["use_competitive"] = True
+            plan["use_recommender"] = True
+            plan["use_report"] = True
         if any(term in q for term in counterfactual_terms):
             plan["use_data"] = True
             plan["use_forecast"] = True

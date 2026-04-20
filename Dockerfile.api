@@ -24,7 +24,6 @@ RUN pip install --no-cache-dir --upgrade pip==24.0 && \
         -r requirements-base.txt \
         -r requirements-api.txt 
 
-
 # ---------------------------------------------------------
 # Copy application code
 # ---------------------------------------------------------

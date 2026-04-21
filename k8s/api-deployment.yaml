@@ -14,11 +14,11 @@ spec:
     spec:
       containers:
         - name: api
-          image: ghcr.io/YOUR_USERNAME/multi-agent-ecommerce-analyst-api:v9
+          image: ghcr.io/michael7467/ecommerce-analyst-api:v10
           imagePullPolicy: Always
           ports:
             - containerPort: 8000
-          
+
           envFrom:
             - configMapRef:
                 name: ecommerce-config

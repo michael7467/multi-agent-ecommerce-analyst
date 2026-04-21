@@ -2,3 +2,4 @@
 pydantic-settings
 faiss-cpu
 openai
+python-json-logger

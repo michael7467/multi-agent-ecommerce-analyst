@@ -14,10 +14,16 @@ spec:
     spec:
       containers:
         - name: api
-          image: ghcr.io/YOUR_USERNAME/multi-agent-ecommerce-analyst-api:latest
-          imagePullPolicy: IfNotPresent
+          image: ghcr.io/YOUR_USERNAME/multi-agent-ecommerce-analyst-api:v9
+          imagePullPolicy: Always
           ports:
             - containerPort: 8000
+          
+          envFrom:
+            - configMapRef:
+                name: ecommerce-config
+            - secretRef:
+                name: ecommerce-secrets
 
           env:
             - name: REDIS_URL

@@ -46,7 +46,6 @@ All agents are orchestrated in a fault-tolerant pipeline.
 ```mermaid
 flowchart TD
     UI[Streamlit UI] --> API[FastAPI Multi-Agent System]
-
     API --> Redis[Redis Cache]
     API --> Qdrant[Qdrant Vector DB]
     API --> OTEL[OpenTelemetry]
@@ -63,7 +62,6 @@ flowchart TD
         Guard[GuardrailAgent]
         Critic[CriticAgent]
     end
-
     API --> Planner
     Planner --> Data
     Data --> Sentiment

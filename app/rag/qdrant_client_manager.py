@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from threading import Lock
 from qdrant_client import QdrantClient
-from app.core.config import settings
+from app.config.settings import settings
 from app.logging.logger import get_logger
 from app.observability.agent_tracing import traced_agent
 

@@ -7,7 +7,7 @@ from sentence_transformers import SentenceTransformer
 from app.observability.metrics import RETRIEVAL_LATENCY_SECONDS, RETRIEVAL_REQUESTS_TOTAL
 from app.observability.tracing import get_tracer
 from app.rag.qdrant_client_manager import get_qdrant_client
-from app.core.config import settings
+from app.config.settings import settings
 from app.logging.logger import get_logger
 
 logger = get_logger("rag.qdrant")

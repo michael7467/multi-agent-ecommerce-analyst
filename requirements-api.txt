@@ -9,3 +9,4 @@ sentence-transformers
 bertopic
 umap-learn
 hdbscan
+altair

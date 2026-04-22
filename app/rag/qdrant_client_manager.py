@@ -4,7 +4,7 @@ from threading import Lock
 from qdrant_client import QdrantClient
 from app.core.config import settings
 from app.logging.logger import get_logger
-from app.observability.agent_tracing import traced_function
+from app.observability.agent_tracing import traced_agent
 
 logger = get_logger("qdrant.client")
 
@@ -12,7 +12,7 @@ _QDRANT_CLIENT: QdrantClient | None = None
 _QDRANT_LOCK = Lock()
 
 
-@traced_function
+@traced_agent("qdrant_build")
 def get_qdrant_client() -> QdrantClient:
     global _QDRANT_CLIENT
 

@@ -4,7 +4,7 @@ import faiss
 import numpy as np
 import pandas as pd
 from app.logging.logger import get_logger
-from app.observability.agent_tracing import traced_function
+from app.observability.agent_tracing import traced_agent
 
 logger = get_logger("retriever.image")
 
@@ -36,7 +36,7 @@ class ImageRetriever:
                 f"FAISS index size ({self.index.ntotal}) does not match metadata rows ({len(self.metadata)})"
             )
 
-    @traced_function
+    @traced_agent("image_retriever_search")
     def search_by_product(self, product_id: str, top_k: int = 5) -> pd.DataFrame:
         if not isinstance(product_id, str):
             raise ValueError("ImageRetriever: product_id must be a string")

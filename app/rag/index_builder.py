@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 from app.logging.logger import get_logger
-from app.observability.agent_tracing import traced_function
+from app.observability.agent_tracing import traced_agent
 
 logger = get_logger("faiss.review_index")
 
@@ -23,7 +23,7 @@ class FaissIndexBuilder:
         # Normalize for cosine similarity
         faiss.normalize_L2(self.embeddings)
 
-    @traced_function
+    @traced_agent("faiss_index_build")
     def build_index(self) -> faiss.Index:
         try:
             embedding_dim = self.embeddings.shape[1]
@@ -35,7 +35,7 @@ class FaissIndexBuilder:
             raise
 
 
-@traced_function
+@traced_agent("faiss_index_save")
 def save_faiss_index(
     embeddings_path: str = "artifacts/embeddings/review_embeddings.npy",
     metadata_path: str = "artifacts/embeddings/review_embedding_metadata.csv",

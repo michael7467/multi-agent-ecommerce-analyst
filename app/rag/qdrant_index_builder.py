@@ -6,7 +6,7 @@ import pandas as pd
 from qdrant_client import QdrantClient, models
 from app.rag.qdrant_client_manager import get_qdrant_client
 from app.logging.logger import get_logger
-from app.observability.agent_tracing import traced_function
+from app.observability.agent_tracing import traced_agent
 
 logger = get_logger("qdrant.index_builder")
 
@@ -42,7 +42,7 @@ class QdrantIndexBuilder:
             ids=ids,
         )
 
-    @traced_function
+    @traced_agent("qdrant_index_build")
     def build(self) -> None:
         if not EMBEDDINGS_PATH.exists():
             raise FileNotFoundError(f"Missing embeddings file: {EMBEDDINGS_PATH}")

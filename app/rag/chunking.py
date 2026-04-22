@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import pandas as pd
 from app.logging.logger import get_logger
-from app.observability.agent_tracing import traced_function
+from app.observability.agent_tracing import traced_agent
 
 logger = get_logger("rag.review_chunk_builder")
 
@@ -16,7 +16,7 @@ class ReviewChunkBuilder:
             if col not in self.df.columns:
                 raise ValueError(f"ReviewChunkBuilder: missing required column '{col}'")
 
-    @traced_function
+    @traced_agent
     def build_documents(self) -> pd.DataFrame:
         df = self.df.copy()
 

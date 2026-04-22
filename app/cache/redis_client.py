@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 
 import redis
-from app.core.config import settings
+from app.config.settings import settings
 
 _REDIS_CLIENT: redis.Redis | None = None
 

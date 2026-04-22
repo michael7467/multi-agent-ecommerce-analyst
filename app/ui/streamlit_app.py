@@ -4,15 +4,14 @@ import pandas as pd
 import streamlit as st
 
 from app.agents.dynamic_orchestrator import DynamicOrchestrator
-from app.observability.metrics import setup_metrics
+
 from app.observability.tracing import setup_tracing
 
-from app.core.config import settings
+from app.config.settings import settings
 from app.logging.logger import get_logger
 
 logger = get_logger("ui.streamlit")
 setup_tracing()
-setup_metrics(port=settings.metrics_port)
 
 st.set_page_config(
     page_title="Multi-Agent E-commerce AI Analyst",

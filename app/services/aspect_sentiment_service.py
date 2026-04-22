@@ -6,7 +6,7 @@ from transformers import pipeline
 
 from app.models.llm.llm_client import LLMClient
 from app.services.aspect_service import AspectService
-from app.core.config import settings
+from app.config.settings import settings
 from app.logging.logger import get_logger
 from app.observability.tracing import get_tracer
 

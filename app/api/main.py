@@ -6,7 +6,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.errors import APIError, api_error_handler, generic_error_handler
 from app.api.routes.analysis import router as analysis_router
 from app.api.routes.health import router as health_router
-from app.observability.metrics import setup_metrics
 from app.observability.tracing import setup_tracing
 from app.config.settings import settings
 from app.logging.logger import get_logger
@@ -20,7 +19,7 @@ from app.observability.metrics import metrics_router
 logger = get_logger("api.main")
 
 setup_tracing()
-setup_metrics(port=settings.metrics_port)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

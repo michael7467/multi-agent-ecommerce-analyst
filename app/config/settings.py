@@ -3,6 +3,7 @@ from __future__ import annotations
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from app.config.env_loader import load_environment
+from pydantic import Field
 
 load_environment()
 
@@ -64,5 +65,6 @@ class Settings(BaseSettings):
     api_key: str | None = None
     rate_limit_per_minute: int = 60
 
+    rate_limit_overrides: dict[str, int] = Field(default_factory=dict)
 
 settings = Settings()

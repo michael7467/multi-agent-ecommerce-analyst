@@ -2,7 +2,6 @@
 pydantic-settings
 faiss-cpu
 openai
-python-json-logger
 torch
 transformers
 sentence-transformers

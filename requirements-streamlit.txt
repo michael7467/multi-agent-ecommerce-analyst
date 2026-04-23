@@ -4,3 +4,4 @@ plotly
 altair
 torch
 torchvision
+python-json-logger

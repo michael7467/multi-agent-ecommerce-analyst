@@ -9,3 +9,4 @@ bertopic
 umap-learn
 hdbscan
 altair
+python-json-logger

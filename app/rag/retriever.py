@@ -6,7 +6,7 @@ import pandas as pd
 from sentence_transformers import SentenceTransformer
 from app.logging.logger import get_logger
 from app.observability.tracing import get_tracer
-from app.config.paths import INDEX_PATH, METADATA_PATH, EMBEDDINGS_PATH
+from app.config.paths import IMAGE_FAISS_INDEX_PATH, METADATA_PATH, EMBEDDINGS_PATH
 logger = get_logger("rag.review_retriever")
 
 _MODEL = None  # Singleton model
@@ -15,7 +15,7 @@ _MODEL = None  # Singleton model
 class ReviewRetriever:
     def __init__(
         self,
-        index_path: str = INDEX_PATH,
+        index_path: str = IMAGE_FAISS_INDEX_PATH,
         metadata_path: str = METADATA_PATH,
         embeddings_path: str = EMBEDDINGS_PATH,
         model_name: str = "sentence-transformers/all-MiniLM-L6-v2",

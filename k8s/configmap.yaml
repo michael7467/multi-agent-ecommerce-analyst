@@ -19,11 +19,10 @@ data:
   IMAGE_METADATA_PATH: "/app/artifacts/embeddings/image_embedding_metadata.csv"
 
   TOPIC_MODELING_OUTPUT_DIR: "/app/artifacts/topic_modeling"
-  INDEX_PATH: "/app/artifacts/indexes/image_faiss.index"
-  METADATA_IMAGE_PATH: "/app/artifacts/embeddings/image_embedding_metadata.csv"
   EMBEDDINGS_PATH: "/app/artifacts/embeddings/review_embeddings.npy"
   METADATA_PATH: "/app/artifacts/embeddings/review_embedding_metadata.csv"
-
+  OUTPUT_DIR: "/app/artifacts/topic_modeling"
+  TOPIC_KEYWORDS_PATH: "/app/artifacts/topic_modeling/topic_keywords.json"
   # Logging
   LOG_LEVEL: "INFO"
   ENABLE_FILE_LOGS: "false"

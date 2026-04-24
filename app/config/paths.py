@@ -52,3 +52,21 @@ TOPIC_MODELING_OUTPUT_DIR = env_path(
     "TOPIC_MODELING_OUTPUT_DIR",
     "artifacts/topic_modeling"
 )
+
+INDEX_PATH= env_path(
+    "INDEX_PATH",
+    "artifacts/indexes/image_faiss.index"
+)
+METADATA_IMAGE_PATH = env_path(
+    "METADATA_IMAGE_PATH",
+    "artifacts/embeddings/image_embedding_metadata.csv"
+)
+EMBEDDINGS_PATH = env_path(
+    "EMBEDDINGS_PATH",
+    "artifacts/embeddings/review_embeddings.npy"
+)
+METADATA_PATH = env_path(
+    "METADATA_PATH",        
+    "artifacts/embeddings/review_embedding_metadata.csv"
+)
+

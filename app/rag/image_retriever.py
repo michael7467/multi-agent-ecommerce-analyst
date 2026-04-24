@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 from app.logging.logger import get_logger
 from app.observability.agent_tracing import traced_agent
-from app.config.paths import INDEX_PATH, METADATA_PATH
+from app.config.paths import INDEX_PATH, METADATA_IMAGE_PATH
 
 logger = get_logger("retriever.image")
 
@@ -13,7 +13,7 @@ class ImageRetriever:
     def __init__(
         self,
         index_path: str = INDEX_PATH,
-        metadata_path: str = METADATA_PATH,
+        metadata_path: str = METADATA_IMAGE_PATH,
     ) -> None:
         try:
             self.index = faiss.read_index(index_path)

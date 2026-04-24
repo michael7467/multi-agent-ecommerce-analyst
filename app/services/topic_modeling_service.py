@@ -9,7 +9,6 @@ from app.config.paths import REVIEWS_PATH, OUTPUT_DIR
 
 
 
-
 class TopicModelingService:
     def __init__(self) -> None:
         representation_model = KeyBERTInspired()

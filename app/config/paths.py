@@ -70,3 +70,12 @@ METADATA_PATH = env_path(
     "artifacts/embeddings/review_embedding_metadata.csv"
 )
 
+TOPIC_KEYWORDS_PATH = env_path(
+    "TOPIC_KEYWORDS_PATH",
+    "artifacts/topic_modeling/topic_keywords_global.csv"
+)
+
+OUTPUT_DIR = env_path(
+    "OUTPUT_DIR",
+    "artifacts/topic_modeling"
+)

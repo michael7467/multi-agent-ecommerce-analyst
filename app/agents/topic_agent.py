@@ -8,7 +8,6 @@ from app.logging.logger import get_logger
 from app.observability.agent_tracing import traced_agent
 from app.config.paths import TOPIC_KEYWORDS_PATH
 
-
 logger = get_logger("agents.topic")
 
 class TopicAgent(BaseAgent):

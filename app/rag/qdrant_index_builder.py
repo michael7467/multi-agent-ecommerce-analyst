@@ -77,3 +77,11 @@ class QdrantIndexBuilder:
 
     def close(self) -> None:
         self.client.close()
+
+        
+if __name__ == "__main__":
+    builder = QdrantIndexBuilder()
+    try:
+        builder.build()
+    finally:
+        builder.close()

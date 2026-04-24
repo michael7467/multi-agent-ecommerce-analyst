@@ -4,8 +4,8 @@ import pandas as pd
 from app.agents.base_agent import BaseAgent
 from app.logging.logger import get_logger
 from app.observability.agent_tracing import traced_agent
+from app.config.paths import SENTIMENT_FEATURES_PATH
 
-SENTIMENT_FEATURES_PATH = "data/processed/electronics_sentiment_features.csv"
 logger = get_logger("agents.sentiment")
 
 class SentimentAgent(BaseAgent):

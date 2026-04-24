@@ -6,8 +6,8 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 from app.logging.logger import get_logger
 from app.observability.tracing import get_tracer
+from app.config.paths import FEATURES_PATH
 
-FEATURES_PATH = "data/processed/electronics_labeled.csv"
 
 logger = get_logger("recommender.service")
 

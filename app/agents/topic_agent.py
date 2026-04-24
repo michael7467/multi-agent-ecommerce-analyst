@@ -6,8 +6,9 @@ import pandas as pd
 from app.agents.base_agent import BaseAgent
 from app.logging.logger import get_logger
 from app.observability.agent_tracing import traced_agent
+from app.config.paths import TOPIC_KEYWORDS_PATH
 
-TOPIC_KEYWORDS_PATH = Path("artifacts/topic_modeling/topic_keywords_global.csv")
+
 logger = get_logger("agents.topic")
 
 class TopicAgent(BaseAgent):

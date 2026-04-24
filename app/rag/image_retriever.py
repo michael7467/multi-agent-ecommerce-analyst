@@ -5,14 +5,15 @@ import numpy as np
 import pandas as pd
 from app.logging.logger import get_logger
 from app.observability.agent_tracing import traced_agent
+from app.config.paths import INDEX_PATH, METADATA_PATH
 
 logger = get_logger("retriever.image")
 
 class ImageRetriever:
     def __init__(
         self,
-        index_path: str = "artifacts/indexes/image_faiss.index",
-        metadata_path: str = "artifacts/embeddings/image_embedding_metadata.csv",
+        index_path: str = INDEX_PATH,
+        metadata_path: str = METADATA_PATH,
     ) -> None:
         try:
             self.index = faiss.read_index(index_path)

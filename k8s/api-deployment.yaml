@@ -59,7 +59,10 @@ spec:
           volumeMounts:
             - name: artifacts-storage
               mountPath: /app/artifacts
-
+            - name: artifacts-storage
+              mountPath: /app/data
+              subPath: data
+              
           resources:
             requests:
               cpu: "500m"

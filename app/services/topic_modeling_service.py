@@ -5,10 +5,9 @@ from pathlib import Path
 import pandas as pd
 from bertopic import BERTopic
 from bertopic.representation import KeyBERTInspired
+from app.config.paths import REVIEWS_PATH, OUTPUT_DIR
 
 
-REVIEWS_PATH = Path("data/interim/reviews_electronics_clean.csv")
-OUTPUT_DIR = Path("artifacts/topic_modeling")
 
 
 class TopicModelingService:

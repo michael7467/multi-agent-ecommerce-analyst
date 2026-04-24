@@ -7,6 +7,18 @@ metadata:
     component: config
 data:
   ENV: "prod"
+  FEATURES_PATH: "/app/data/processed/electronics_labeled.csv"
+  SENTIMENT_FEATURES_PATH: "/app/data/processed/electronics_sentiment_features.csv"
+  REVIEWS_PATH: "/app/data/interim/reviews_electronics_clean.csv"
+
+  REVIEW_EMBEDDINGS_PATH: "/app/artifacts/embeddings/review_embeddings.npy"
+  REVIEW_METADATA_PATH: "/app/artifacts/embeddings/review_embedding_metadata.csv"
+  REVIEW_FAISS_INDEX_PATH: "/app/artifacts/indexes/review_faiss.index"
+
+  IMAGE_FAISS_INDEX_PATH: "/app/artifacts/indexes/image_faiss.index"
+  IMAGE_METADATA_PATH: "/app/artifacts/embeddings/image_embedding_metadata.csv"
+
+  TOPIC_MODELING_OUTPUT_DIR: "/app/artifacts/topic_modeling"
 
   # Logging
   LOG_LEVEL: "INFO"

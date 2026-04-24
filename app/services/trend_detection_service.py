@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 import pandas as pd
+from app.config.paths import FEATURES_PATH, REVIEWS_PATH
 
-
-FEATURES_PATH = "data/processed/electronics_labeled.csv"
-REVIEWS_PATH = "data/interim/reviews_electronics_clean.csv"
 
 
 class TrendDetectionService:

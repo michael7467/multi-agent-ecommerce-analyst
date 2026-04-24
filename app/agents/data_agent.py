@@ -4,8 +4,8 @@ import pandas as pd
 from app.agents.base_agent import BaseAgent
 from app.logging.logger import get_logger
 from app.observability.agent_tracing import traced_agent
+from app.config.paths import FEATURES_PATH
 
-FEATURES_PATH = "data/processed/electronics_labeled.csv"
 logger = get_logger("agents.data_agent")
 
 class DataAgent(BaseAgent):

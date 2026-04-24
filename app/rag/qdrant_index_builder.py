@@ -7,11 +7,11 @@ from qdrant_client import QdrantClient, models
 from app.rag.qdrant_client_manager import get_qdrant_client
 from app.logging.logger import get_logger
 from app.observability.agent_tracing import traced_agent
+from app.config.paths import EMBEDDINGS_PATH, METADATA_PATH
 
 logger = get_logger("qdrant.index_builder")
 
-EMBEDDINGS_PATH = Path("artifacts/embeddings/review_embeddings.npy")
-METADATA_PATH = Path("artifacts/embeddings/review_embedding_metadata.csv")
+
 COLLECTION_NAME = "review_embeddings"
 
 

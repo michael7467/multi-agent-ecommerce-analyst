@@ -5,8 +5,7 @@ from app.models.forecasting.predict import PricePredictor
 from app.services.rag_service import RAGService
 from app.logging.logger import get_logger
 from app.observability.tracing import get_tracer
-
-FEATURES_PATH = "data/processed/electronics_labeled.csv"
+from app.config.paths import FEATURES_PATH
 logger = get_logger("analysis.service")
 
 

@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: api
-          image: ghcr.io/michael7467/ecommerce-analyst-api:v11
+          image: ghcr.io/michael7467/ecommerce-analyst-api:v12
           imagePullPolicy: Always
           ports:
             - containerPort: 8000

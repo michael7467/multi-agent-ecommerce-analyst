@@ -1,9 +1,9 @@
 import sqlite3
 from pathlib import Path
+from app.config.paths import PRODUCT_MEMORY_PATH
 
 
-DB_PATH = Path("artifacts/memory/product_memory.db")
-
+DB_PATH = PRODUCT_MEMORY_PATH
 
 def get_connection():
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)

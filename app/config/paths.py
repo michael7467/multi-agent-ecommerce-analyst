@@ -71,3 +71,7 @@ OUTPUT_DIR = env_path(
     "OUTPUT_DIR",
     "artifacts/topic_modeling"
 )
+PRODUCT_MEMORY_PATH= env_path(
+    "PRODUCT_MEMORY_PATH",
+    "artifacts/memory/product_memory.db"
+)

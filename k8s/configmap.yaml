@@ -33,6 +33,7 @@ data:
   EMBEDDINGS_PATH: "/app/artifacts/embeddings/review_embeddings.npy"
   METADATA_PATH: "/app/artifacts/embeddings/review_embedding_metadata.csv"
   OUTPUT_DIR: "/app/artifacts/topic_modeling"
+  PRODUCT_MEMORY_PATH: "/app/artifacts/memory/product_memory.db"
 
   # ========================
   # Models

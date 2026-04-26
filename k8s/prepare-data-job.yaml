@@ -1,0 +1,44 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: prepare-ecommerce-data
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: prepare-data
+          image: amazon/aws-cli:2.15.57
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+
+              mkdir -p /app/data
+              mkdir -p /app/artifacts
+
+              echo "Downloading data from S3..."
+              aws s3 cp s3://janoai/data /app/data --recursive
+
+              echo "Downloading artifacts from S3..."
+              aws s3 cp s3://janoai/artifacts /app/artifacts --recursive
+
+              echo "Done."
+              ls -R /app/data
+              ls -R /app/artifacts
+          envFrom:
+            - secretRef:
+                name: aws-s3-secret
+          volumeMounts:
+            - name: data-storage
+              mountPath: /app/data
+            - name: artifacts-storage
+              mountPath: /app/artifacts
+      volumes:
+        - name: data-storage
+          persistentVolumeClaim:
+            claimName: data-pvc
+        - name: artifacts-storage
+          persistentVolumeClaim:
+            claimName: artifacts-pvc

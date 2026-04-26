@@ -1,18 +1,18 @@
 from __future__ import annotations
 
-from pathlib import Path
 import numpy as np
 import pandas as pd
-from qdrant_client import QdrantClient, models
+from qdrant_client import models
+
 from app.rag.qdrant_client_manager import get_qdrant_client
 from app.logging.logger import get_logger
 from app.observability.agent_tracing import traced_agent
 from app.config.paths import EMBEDDINGS_PATH, METADATA_PATH
+from app.config.settings import settings
 
 logger = get_logger("qdrant.index_builder")
 
-
-COLLECTION_NAME = "review_embeddings"
+COLLECTION_NAME = settings.qdrant_collection_name
 
 
 class QdrantIndexBuilder:
@@ -63,8 +63,9 @@ class QdrantIndexBuilder:
                 f"Embeddings count ({len(embeddings)}) does not match metadata count ({len(metadata_df)})"
             )
 
-        # Normalize for cosine similarity
-        embeddings /= np.linalg.norm(embeddings, axis=1, keepdims=True)
+        norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
+        norms[norms == 0] = 1.0
+        embeddings = embeddings / norms
 
         vector_size = embeddings.shape[1]
         self.create_or_replace_collection(vector_size=vector_size)
@@ -78,7 +79,7 @@ class QdrantIndexBuilder:
     def close(self) -> None:
         self.client.close()
 
-        
+
 if __name__ == "__main__":
     builder = QdrantIndexBuilder()
     try:

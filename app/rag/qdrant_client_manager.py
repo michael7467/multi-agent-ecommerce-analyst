@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from threading import Lock
 from qdrant_client import QdrantClient
+
 from app.config.settings import settings
 from app.logging.logger import get_logger
 from app.observability.agent_tracing import traced_agent
@@ -29,21 +30,22 @@ def get_qdrant_client() -> QdrantClient:
         try:
             if settings.qdrant_mode == "server":
                 _QDRANT_CLIENT = QdrantClient(
-                    host=settings.qdrant_host,
-                    port=settings.qdrant_port,
+                    url=settings.qdrant_url,
                     api_key=settings.qdrant_api_key or None,
+                    check_compatibility=False,
                 )
             else:
                 _QDRANT_CLIENT = QdrantClient(
                     path=settings.qdrant_storage_path,
                 )
 
-            # Lightweight health check
             _QDRANT_CLIENT.get_collections()
 
         except Exception:
             logger.error("Failed to initialize Qdrant client", exc_info=True)
             raise
 
-        logger.info(f"Qdrant client initialized in {settings.qdrant_mode} mode")
+        logger.info(
+            f"Qdrant client initialized in {settings.qdrant_mode} mode"
+        )
         return _QDRANT_CLIENT

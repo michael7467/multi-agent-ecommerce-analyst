@@ -3,7 +3,6 @@ from __future__ import annotations
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from app.config.env_loader import load_environment
-from pydantic import Field
 
 load_environment()
 
@@ -37,7 +36,7 @@ class Settings(BaseSettings):
     redis_url: str = Field(..., description="Redis connection URL")
 
     # Qdrant
-    qdrant_url: str | None = None
+    qdrant_url: str = "http://localhost:6333"
     qdrant_api_key: str | None = None
     qdrant_mode: str = "local"
     qdrant_storage_path: str = "artifacts/qdrant_storage"

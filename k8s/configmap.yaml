@@ -5,12 +5,20 @@ metadata:
   labels:
     app: ecommerce-api
     component: config
+
 data:
   ENV: "prod"
+
+  # ========================
+  # Data paths (PVC mounted)
+  # ========================
   FEATURES_PATH: "/app/data/processed/electronics_labeled.csv"
   SENTIMENT_FEATURES_PATH: "/app/data/processed/electronics_sentiment_features.csv"
   REVIEWS_PATH: "/app/data/interim/reviews_electronics_clean.csv"
 
+  # ========================
+  # Artifacts (PVC mounted)
+  # ========================
   REVIEW_EMBEDDINGS_PATH: "/app/artifacts/embeddings/review_embeddings.npy"
   REVIEW_METADATA_PATH: "/app/artifacts/embeddings/review_embedding_metadata.csv"
   REVIEW_FAISS_INDEX_PATH: "/app/artifacts/indexes/review_faiss.index"
@@ -19,30 +27,52 @@ data:
   IMAGE_METADATA_PATH: "/app/artifacts/embeddings/image_embedding_metadata.csv"
 
   TOPIC_MODELING_OUTPUT_DIR: "/app/artifacts/topic_modeling"
+  TOPIC_KEYWORDS_PATH: "/app/artifacts/topic_modeling/topic_keywords.json"
+
+  # Backward compatibility (optional but safe)
   EMBEDDINGS_PATH: "/app/artifacts/embeddings/review_embeddings.npy"
   METADATA_PATH: "/app/artifacts/embeddings/review_embedding_metadata.csv"
   OUTPUT_DIR: "/app/artifacts/topic_modeling"
-  TOPIC_KEYWORDS_PATH: "/app/artifacts/topic_modeling/topic_keywords.json"
-  # Logging
-  LOG_LEVEL: "INFO"
-  ENABLE_FILE_LOGS: "false"
 
-  # Core services
-  REDIS_URL: "redis://redis:6379"
-  QDRANT_URL: "http://qdrant:6333"
+  # ========================
+  # Models
+  # ========================
+  PRICE_MODEL_PATH: "/app/artifacts/models/price_class_model_with_text.joblib"
+  PRICE_LABEL_ENCODER_PATH: "/app/artifacts/models/price_class_label_encoder_with_text.joblib"
+
+  # ========================
+  # Service URLs (IMPORTANT FIX)
+  # ========================
+  API_BASE_URL: "http://ecommerce-api-service:8000"
+  API_URL: "http://ecommerce-api-service:8000"
+
+  REDIS_URL: "redis://redis-service:6379"
+  QDRANT_URL: "http://qdrant-service:6333"
   QDRANT_MODE: "server"
   QDRANT_COLLECTION_NAME: "review_embeddings"
 
-  # API / UI ports
+  # ========================
+  # App ports
+  # ========================
   API_HOST: "0.0.0.0"
   API_PORT: "8000"
   STREAMLIT_PORT: "8501"
 
+  # ========================
   # Observability
+  # ========================
   OTEL_SERVICE_NAME: "multi-agent-ecommerce-analyst"
   OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
   OTEL_TRACES_EXPORTER_MODE: "console"
 
-  # Metrics + rate limiting
+  # ========================
+  # Metrics / limits
+  # ========================
   METRICS_PORT: "9000"
   RATE_LIMIT_PER_MINUTE: "100"
+
+  # ========================
+  # Logging
+  # ========================
+  LOG_LEVEL: "INFO"
+  ENABLE_FILE_LOGS: "false"

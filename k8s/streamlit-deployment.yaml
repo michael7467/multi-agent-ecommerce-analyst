@@ -7,10 +7,12 @@ spec:
   selector:
     matchLabels:
       app: ecommerce-streamlit
+
   template:
     metadata:
       labels:
         app: ecommerce-streamlit
+
     spec:
       securityContext:
         fsGroup: 1000
@@ -19,6 +21,7 @@ spec:
         - name: streamlit
           image: ghcr.io/michael7467/ecommerce-analyst-ui:v4
           imagePullPolicy: IfNotPresent
+
           ports:
             - containerPort: 8501
 
@@ -28,7 +31,6 @@ spec:
             - secretRef:
                 name: ecommerce-secrets
 
-          # Override only what differs from config
           env:
             - name: REDIS_URL
               value: redis://redis-service:6379/0
@@ -62,5 +64,20 @@ spec:
             limits:
               cpu: "1500m"
               memory: "2Gi"
+
+          volumeMounts:
+            - name: data-storage
+              mountPath: /app/data
+            - name: artifacts-storage
+              mountPath: /app/artifacts
+
+      volumes:
+        - name: data-storage
+          persistentVolumeClaim:
+            claimName: data-pvc
+
+        - name: artifacts-storage
+          persistentVolumeClaim:
+            claimName: artifacts-pvc
 
       restartPolicy: Always

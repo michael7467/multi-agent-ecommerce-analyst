@@ -12,6 +12,9 @@ spec:
       labels:
         app: ecommerce-api
     spec:
+      securityContext:
+        fsGroup: 1000
+
       containers:
         - name: api
           image: ghcr.io/michael7467/ecommerce-analyst-api:v13
@@ -57,12 +60,12 @@ spec:
             failureThreshold: 3
 
           volumeMounts:
+            - name: data-storage
+              mountPath: /app/data
+
             - name: artifacts-storage
               mountPath: /app/artifacts
-            - name: artifacts-storage
-              mountPath: /app/data
-              subPath: data
-              
+
           resources:
             requests:
               cpu: "500m"
@@ -72,6 +75,9 @@ spec:
               memory: "2Gi"
 
       volumes:
+        - name: data-storage
+          persistentVolumeClaim:
+            claimName: data-pvc
         - name: artifacts-storage
           persistentVolumeClaim:
             claimName: artifacts-pvc

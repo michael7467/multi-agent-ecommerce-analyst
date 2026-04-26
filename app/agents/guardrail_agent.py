@@ -11,7 +11,7 @@ class GuardrailAgent(BaseAgent):
     def __init__(self) -> None:
         super().__init__(name="GuardrailAgent")
 
-    @traced_agent
+    @traced_agent("GuardrailAgent.run")
     def run(self, predicted_class: str, report: str) -> dict:
         if not isinstance(predicted_class, str):
             raise ValueError("GuardrailAgent: predicted_class must be a string")

@@ -12,7 +12,7 @@ class ImageRetrievalAgent(BaseAgent):
         super().__init__(name="ImageRetrievalAgent")
         self.retriever = ImageRetriever()
 
-    @traced_agent
+    @traced_agent("ImageRetrievalAgent.run")
     def run(self, product_id: str, top_k: int = 5) -> dict:
         if not isinstance(product_id, str):
             raise ValueError("ImageRetrievalAgent: product_id must be a string")

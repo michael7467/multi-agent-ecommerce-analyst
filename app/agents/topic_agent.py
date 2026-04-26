@@ -60,7 +60,7 @@ class TopicAgent(BaseAgent):
             for _, row in pain_df.head(top_k).iterrows()
         ]
 
-    @traced_agent
+    @traced_agent("TopicAgent.run")
     def run(self, top_k: int = 5) -> dict:
         if not isinstance(top_k, int) or top_k <= 0:
             raise ValueError("TopicAgent: top_k must be a positive integer")

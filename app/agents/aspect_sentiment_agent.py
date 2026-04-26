@@ -12,7 +12,7 @@ class AspectSentimentAgent(BaseAgent):
         super().__init__(name="AspectSentimentAgent")
         self.service = AspectSentimentService(backend=backend)
 
-    @traced_agent
+    @traced_agent("AspectSentimentAgent.run")
     def run(self, product_id: str, top_k: int = 3) -> dict:
         if not isinstance(product_id, str):
             raise ValueError("AspectSentimentAgent: product_id must be a string")

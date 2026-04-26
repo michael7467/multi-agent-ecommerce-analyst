@@ -7,7 +7,6 @@ from altair import value
 from app.agents.base_agent import BaseAgent
 from app.models.llm.llm_client import LLMClient
 from app.logging.logger import get_logger
-from app.observability.agent_tracing import traced_agent
 
 logger = get_logger("agents.planning_agent")
 

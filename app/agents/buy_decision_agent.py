@@ -12,7 +12,7 @@ class BuyDecisionAgent(BaseAgent):
         super().__init__(name="BuyDecisionAgent")
         self.service = BuyDecisionService()
 
-    @traced_agent
+    @traced_agent("BuyDecisionAgent.run")
     def run(self, analysis_result: dict) -> dict:
         if not isinstance(analysis_result, dict):
             raise ValueError("BuyDecisionAgent: analysis_result must be a dict")

@@ -12,7 +12,7 @@ class ForecastAgent(BaseAgent):
         super().__init__(name="ForecastAgent")
         self.predictor = PricePredictor()
 
-    @traced_agent
+    @traced_agent("ForecastAgent.run")
     def run(self, product_data: dict) -> dict:
         if not isinstance(product_data, dict):
             raise ValueError("ForecastAgent: product_data must be a dict")

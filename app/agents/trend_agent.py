@@ -12,7 +12,7 @@ class TrendAgent(BaseAgent):
         super().__init__(name="TrendAgent")
         self.service = TrendDetectionService()
 
-    @traced_agent
+    @traced_agent("TrendAgent.run")
     def run(self) -> dict:
         try:
             trend_result = self.service.analyze()

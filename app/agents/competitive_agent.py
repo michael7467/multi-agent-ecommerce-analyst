@@ -12,7 +12,7 @@ class CompetitiveAgent(BaseAgent):
         super().__init__(name="CompetitiveAgent")
         self.service = CompetitiveService()
 
-    @traced_agent
+    @traced_agent("CompetitiveAgent.run")
     def run(self, product_id: str, top_k: int = 5) -> dict:
         if not isinstance(product_id, str):
             raise ValueError("CompetitiveAgent: product_id must be a string")

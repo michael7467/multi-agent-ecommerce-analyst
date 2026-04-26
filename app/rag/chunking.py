@@ -16,7 +16,7 @@ class ReviewChunkBuilder:
             if col not in self.df.columns:
                 raise ValueError(f"ReviewChunkBuilder: missing required column '{col}'")
 
-    @traced_agent
+    @traced_agent("ReviewChunkBuilder.build_documents")
     def build_documents(self) -> pd.DataFrame:
         df = self.df.copy()
 

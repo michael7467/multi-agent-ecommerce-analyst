@@ -12,7 +12,7 @@ class MemoryAgent(BaseAgent):
     def __init__(self) -> None:
         super().__init__(name="MemoryAgent")
 
-    @traced_agent
+    @traced_agent("MemoryAgent.run")
     def run(self, product_id: str) -> dict:
         if not isinstance(product_id, str):
             raise ValueError("MemoryAgent: product_id must be a string")
@@ -49,7 +49,7 @@ class MemoryAgent(BaseAgent):
             "last_report": row[4],
         }
 
-    @traced_agent
+    @traced_agent("MemoryAgent.save_product_memory")
     def save_product_memory(self, analysis_result: dict) -> None:
         required = ["product_id", "title", "predicted_class", "report"]
         for key in required:
@@ -83,7 +83,7 @@ class MemoryAgent(BaseAgent):
                 ),
             )
 
-    @traced_agent
+    @traced_agent("MemoryAgent.save_history")
     def save_history(self, product_id: str, query: str, report: str) -> None:
         with get_connection() as conn:
             cursor = conn.cursor()

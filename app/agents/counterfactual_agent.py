@@ -12,7 +12,7 @@ class CounterfactualAgent(BaseAgent):
         super().__init__(name="CounterfactualAgent")
         self.service = CounterfactualService()
 
-    @traced_agent
+    @traced_agent("CounterfactualAgent.run")
     def run(self, product_data: dict) -> dict:
         if not isinstance(product_data, dict):
             raise ValueError("CounterfactualAgent: product_data must be a dict")

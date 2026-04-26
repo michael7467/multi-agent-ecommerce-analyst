@@ -12,7 +12,7 @@ class RecommenderAgent(BaseAgent):
         super().__init__(name="RecommenderAgent")
         self.recommender_service = RecommenderService()
 
-    @traced_agent
+    @traced_agent("RecommenderAgent.run")
     def run(self, product_id: str, top_k: int = 5) -> dict:
         if not isinstance(product_id, str):
             raise ValueError("RecommenderAgent: product_id must be a string")

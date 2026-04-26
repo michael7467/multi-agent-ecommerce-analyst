@@ -12,7 +12,7 @@ class ReportAgent(BaseAgent):
         super().__init__(name="ReportAgent")
         self.report_service = ReportService()
 
-    @traced_agent
+    @traced_agent("ReportAgent.run")
     def run(self, analysis_result: dict) -> dict:
         if not isinstance(analysis_result, dict):
             raise ValueError("ReportAgent: analysis_result must be a dict")

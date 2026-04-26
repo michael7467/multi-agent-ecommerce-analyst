@@ -30,7 +30,7 @@ class SentimentAgent(BaseAgent):
 
         self.cache = {}
 
-    @traced_agent
+    @traced_agent("SentimentAgent.run")
     def run(self, product_id: str) -> dict:
         if not isinstance(product_id, str):
             raise ValueError("SentimentAgent: product_id must be a string")

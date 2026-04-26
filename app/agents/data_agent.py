@@ -17,7 +17,7 @@ class DataAgent(BaseAgent):
         if "product_id" not in self.features_df.columns:
             raise ValueError("DataAgent: 'product_id' column missing in dataset")
 
-    @traced_agent
+    @traced_agent("DataAgent.run")
     def run(self, product_id: str) -> dict:
         matches = self.features_df[
             self.features_df["product_id"].astype(str) == str(product_id)

@@ -107,7 +107,7 @@ Critique: <short critique>
 """
         return prompt.strip()
 
-    @traced_agent
+    @traced_agent("CriticAgent.run")
     def run(self, analysis_result: dict, report: str) -> dict:
         if not isinstance(analysis_result, dict):
             raise ValueError("CriticAgent: analysis_result must be a dict")

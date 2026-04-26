@@ -19,7 +19,7 @@ spec:
 
       containers:
         - name: streamlit
-          image: ghcr.io/michael7467/ecommerce-analyst-ui:v5
+          image: ghcr.io/michael7467/ecommerce-analyst-ui:v6
           imagePullPolicy: IfNotPresent
 
           ports:

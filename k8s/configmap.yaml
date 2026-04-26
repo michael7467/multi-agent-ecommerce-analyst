@@ -27,7 +27,7 @@ data:
   IMAGE_METADATA_PATH: "/app/artifacts/embeddings/image_embedding_metadata.csv"
 
   TOPIC_MODELING_OUTPUT_DIR: "/app/artifacts/topic_modeling"
-  TOPIC_KEYWORDS_PATH: "/app/artifacts/topic_modeling/topic_keywords.json"
+  TOPIC_KEYWORDS_PATH: "/app/artifacts/topic_modeling/topic_keywords_global.csv"
 
   # Backward compatibility (optional but safe)
   EMBEDDINGS_PATH: "/app/artifacts/embeddings/review_embeddings.npy"

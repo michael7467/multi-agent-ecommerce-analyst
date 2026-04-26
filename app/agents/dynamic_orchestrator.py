@@ -15,6 +15,7 @@ from app.agents.memory_agent import MemoryAgent
 from app.agents.aspect_sentiment_agent import AspectSentimentAgent
 from app.agents.topic_agent import TopicAgent
 from app.agents.counterfactual_agent import CounterfactualAgent
+from app.config import settings
 from app.services.cache_service import CacheService
 from app.observability.tracing import get_tracer
 from app.observability.metrics import (
@@ -111,10 +112,10 @@ class DynamicOrchestrator:
                 raise
 
     def run(self, product_id: str, query: str, top_k: int = 3) -> dict:
-        ANALYSIS_REQUESTS_TOTAL.inc()
+        ANALYSIS_REQUESTS_TOTAL.labels(endpoint="/analyze").inc()
 
         with IN_PROGRESS_ANALYSIS.track_inprogress():
-            with ANALYSIS_LATENCY_SECONDS.time():
+            with ANALYSIS_LATENCY_SECONDS.labels(endpoint="/analyze").time():
                 with self.tracer.start_as_current_span("dynamic_orchestrator.run") as span:
                     trace_id = _get_trace_id()
 
@@ -140,15 +141,14 @@ class DynamicOrchestrator:
 
                         cached = self.cache_service.get_json("analysis:full", cache_payload)
                         if cached:
-                            CACHE_HITS_TOTAL.inc()
+                            CACHE_HITS_TOTAL.labels(cache_name="analysis_cache").inc()
                             logger.info(
                                 "Cache hit",
                                 extra={"trace_id": trace_id, "product_id": product_id},
                             )
                             return cached
 
-                        CACHE_MISSES_TOTAL.inc()
-
+                        CACHE_MISSES_TOTAL.labels(cache_name="analysis_cache").inc()
                         # -------------------------
                         # Memory + Planning
                         # -------------------------
@@ -303,7 +303,7 @@ class DynamicOrchestrator:
 
                         # 14. Report Generation
                         if plan.get("use_report"):
-                            with REPORT_LATENCY_SECONDS.time():
+                            with REPORT_LATENCY_SECONDS.labels(model=settings.llm_model).time():
                                 report = self._safe_agent_call(
                                     "report_agent",
                                     self.report_agent.run,
@@ -363,7 +363,7 @@ class DynamicOrchestrator:
                         return final
 
                     except Exception:
-                        ANALYSIS_ERRORS_TOTAL.inc()
+                        ANALYSIS_ERRORS_TOTAL.labels(endpoint="/analyze").inc()
                         logger.error(
                             "Analysis failed",
                             extra={

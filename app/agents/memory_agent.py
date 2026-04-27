@@ -51,10 +51,29 @@ class MemoryAgent(BaseAgent):
 
     @traced_agent("MemoryAgent.save_product_memory")
     def save_product_memory(self, analysis_result: dict) -> None:
-        required = ["product_id", "title", "predicted_class", "report"]
-        for key in required:
-            if key not in analysis_result:
-                raise ValueError(f"MemoryAgent: missing required field '{key}'")
+        product_id = analysis_result.get("product_id")
+        title = analysis_result.get("title", "")
+        report = analysis_result.get("report")
+
+        predicted_class = (
+            analysis_result.get("predicted_class")
+            or analysis_result.get("last_predicted_class")
+            or analysis_result.get("price_class")
+            or analysis_result.get("forecast", {}).get("predicted_class")
+        )
+
+        if not product_id or not report:
+            logger.warning(
+                "MemoryAgent: skipping memory save because product_id or report is missing"
+            )
+            return
+
+        if predicted_class is None:
+            logger.warning(
+                "MemoryAgent: skipping memory save because predicted_class is missing",
+                extra={"product_id": product_id},
+            )
+            return
 
         sentiment = analysis_result.get("sentiment", {})
         avg_sentiment = sentiment.get("avg_sentiment_score")
@@ -75,13 +94,14 @@ class MemoryAgent(BaseAgent):
                     last_updated = CURRENT_TIMESTAMP
                 """,
                 (
-                    analysis_result["product_id"],
-                    analysis_result["title"],
-                    analysis_result["predicted_class"],
+                    product_id,
+                    title,
+                    predicted_class,
                     avg_sentiment,
-                    analysis_result["report"],
+                    report,
                 ),
             )
+            conn.commit()
 
     @traced_agent("MemoryAgent.save_history")
     def save_history(self, product_id: str, query: str, report: str) -> None:

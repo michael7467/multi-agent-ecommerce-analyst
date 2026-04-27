@@ -82,7 +82,7 @@ class DynamicOrchestrator:
         """
         with self.tracer.start_as_current_span(f"{name}.run") as span:
             span.set_attribute("agent", name)
-            span.set_attribute("args", str(kwargs))
+            span.set_attribute("input_args", str(kwargs))
 
             try:
                 result = fn(**kwargs)
@@ -94,7 +94,7 @@ class DynamicOrchestrator:
                     extra={
                         "agent": name,
                         "trace_id": _get_trace_id(),
-                        "args": kwargs,
+                        "input_args": kwargs
                     },
                 )
                 return result

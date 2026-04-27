@@ -15,7 +15,7 @@ from app.agents.memory_agent import MemoryAgent
 from app.agents.aspect_sentiment_agent import AspectSentimentAgent
 from app.agents.topic_agent import TopicAgent
 from app.agents.counterfactual_agent import CounterfactualAgent
-from app.config import settings
+from app.config.settings import settings
 from app.services.cache_service import CacheService
 from app.observability.tracing import get_tracer
 from app.observability.metrics import (

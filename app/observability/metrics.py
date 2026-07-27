@@ -30,6 +30,19 @@ agent_errors_total = Counter(
     registry=registry,
 )
 
+# Was previously flying entirely blind: agent_errors_total counts that
+# something failed, but not what kind of failure. ValueError is the
+# convention this codebase uses throughout for input validation failures
+# (e.g. "product_id must be a non-empty string") -- distinct from a
+# genuine infrastructure/dependency failure, and worth being able to tell
+# apart in a dashboard rather than lumped into one generic error count.
+agent_validation_failures_total = Counter(
+    "agent_validation_failures_total",
+    "Total number of agent input validation failures (ValueError specifically)",
+    ["agent"],
+    registry=registry,
+)
+
 # -----------------------------
 # Analysis Metrics
 # -----------------------------
@@ -97,6 +110,58 @@ CACHE_MISSES_TOTAL = Counter(
 # -----------------------------
 # LLM Metrics
 # -----------------------------
+# -----------------------------
+# LLM Reliability Metrics
+# -----------------------------
+# Neither of these existed before, despite this codebase having several
+# places that already carefully distinguish these exact outcomes in code
+# (the "method": "llm_fallback" tags in aspect_sentiment_service.py, the
+# exception-vs-unparseable split in every LLM-judge built this session) --
+# that distinction was never surfaced anywhere a dashboard could see it.
+parse_failure_total = Counter(
+    "parse_failure_total",
+    "Total number of LLM response parsing failures (malformed/unparseable output)",
+    ["component"],  # e.g., llm_relevance_judge, faithfulness_judge, critic_agent, planning_agent
+    registry=registry,
+)
+
+fallback_usage_total = Counter(
+    "fallback_usage_total",
+    "Total number of times a fallback/degraded result was used instead of a genuine one",
+    ["component", "reason"],  # reason e.g., llm_call_failed, unparseable_response, contradiction_detected
+    registry=registry,
+)
+
+# -----------------------------
+# Query Classification Metrics
+# -----------------------------
+# Nothing tracked which kind of query the planner was actually seeing --
+# needed for a "query type distribution" dashboard panel, which can't be
+# derived from any other existing metric.
+# -----------------------------
+# Generation Reliability Metrics
+# -----------------------------
+# Derived from CriticAgent's existing hallucination_risk score, not a new
+# LLM call -- see app/evaluation/metrics/generation_metrics.py, which
+# already has the 1-10 -> 0-1 conversion this reuses. This is the live,
+# every-request version; FaithfulnessJudge's per-claim check (built for
+# the generation eval turn) is deliberately NOT wired here -- it's an
+# expensive, ground-truth-dependent check meant for periodic offline
+# evaluation, not something to run on every live request.
+critic_hallucination_rate = Histogram(
+    "critic_hallucination_rate",
+    "Hallucination rate derived from CriticAgent's hallucination_risk score (0=none, 1=high)",
+    buckets=[0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+    registry=registry,
+)
+
+query_type_total = Counter(
+    "query_type_total",
+    "Total number of queries matching each intent category in planning_agent's rule set",
+    ["query_type"],  # e.g., buy_decision, opinion, aspect, pricing, unmatched
+    registry=registry,
+)
+
 REPORT_LATENCY_SECONDS = Histogram(
     "report_latency_seconds",
     "LLM report generation latency in seconds",

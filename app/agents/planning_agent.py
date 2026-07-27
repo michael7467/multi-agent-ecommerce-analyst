@@ -7,6 +7,7 @@ from typing import Any
 from app.agents.base_agent import BaseAgent
 from app.logging.logger import get_logger
 from app.models.llm.llm_client import LLMClient
+from app.observability.metrics import query_type_total
 
 logger = get_logger("agents.planning_agent")
 
@@ -97,6 +98,19 @@ Return JSON with exactly these keys and boolean values:
                 raise
             return json.loads(match.group(0))
 
+    @staticmethod
+    def _contains_any(text: str, terms: list[str]) -> bool:
+        """Word-boundary term matching, not raw substring containment.
+
+        Plain `term in text` false-positives on short terms hiding inside
+        unrelated words -- e.g. "fit" matches inside "benefit", so a query
+        about the *benefit* of a product would incorrectly trigger
+        aspect-sentiment analysis meant for physical *fit*.
+        """
+        return any(
+            re.search(r"\b" + re.escape(term) + r"\b", text) for term in terms
+        )
+
     def _normalize_plan(self, plan: dict[str, Any]) -> dict[str, bool]:
         default = self._safe_default_plan()
         normalized: dict[str, bool] = {}
@@ -116,126 +130,139 @@ Return JSON with exactly these keys and boolean values:
 
         return normalized
 
+    # Each rule is (terms, flags_to_set). If any term matches the query,
+    # every flag in `flags_to_set` is set True on the plan. Rules only ever
+    # add flags -- order doesn't affect the result, since it's a monotonic
+    # OR over independent booleans, not a series of overrides.
+    #
+    # A few terms deliberately appear in more than one rule's list because
+    # they're genuinely ambiguous (e.g. "worth"/"value" span both aspect
+    # framing and pricing framing). That's intentional, not copy-paste
+    # drift -- but keeping every rule's terms in one table, instead of
+    # scattered across 12 local variables, means an overlap like this is
+    # something you can actually see, instead of something you'd only find
+    # by manually diffing lists (which is how the previous review of this
+    # file caught it).
+    _RULES: list[tuple[list[str], dict[str, bool]]] = [
+        (
+            [
+                "trend", "trends", "rising categories", "declining categories",
+                "emerging complaints", "seasonal", "seasonality",
+                "market trend", "category trend",
+            ],
+            {"use_trends": True, "use_report": True},
+        ),
+        (
+            [
+                "should i buy", "should you buy", "buy it", "worth buying",
+                "is it worth it", "recommend this product", "would you recommend",
+            ],
+            {
+                "use_buy_decision": True,
+                "use_sentiment": True,
+                "use_aspect_sentiment": True,
+                "use_retrieval": True,
+                "use_forecast": True,
+                "use_recommender": True,
+                "use_report": True,
+            },
+        ),
+        (
+            [
+                "compare", "competitor", "competitors", "vs", "versus",
+                "alternative", "alternatives", "tradeoff", "tradeoffs",
+                "strengths", "weaknesses", "price performance",
+            ],
+            {"use_competitive": True, "use_recommender": True, "use_report": True},
+        ),
+        (
+            [
+                "what if", "counterfactual", "would change",
+                "if rating increased", "if reviews increased",
+                "how could", "what would need to change",
+            ],
+            {"use_forecast": True, "use_counterfactuals": True, "use_report": True},
+        ),
+        (
+            [
+                "theme", "themes", "topic", "topics",
+                "pain point", "pain points", "common issues",
+                "common problems", "main problems",
+            ],
+            {"use_topics": True, "use_report": True},
+        ),
+        (
+            [
+                "think", "opinion", "opinions", "feel", "customers", "customer",
+                "review", "reviews", "complaint", "complaints", "feedback",
+            ],
+            {"use_sentiment": True, "use_retrieval": True},
+        ),
+        (
+            [
+                "sound", "sound quality", "battery", "battery life", "comfort",
+                "comfortable", "durability", "durable", "build quality",
+                "material", "design", "fit", "noise cancellation",
+                "noise cancelling", "value", "worth", "price/value",
+            ],
+            {
+                "use_aspect_sentiment": True,
+                "use_retrieval": True,
+                "use_summarization": True,
+            },
+        ),
+        (
+            [
+                "price", "expensive", "cheap", "worth", "overpriced",
+                "value", "fair price", "buy", "wait",
+            ],
+            {
+                "use_forecast": True,
+                "use_sentiment": True,
+                "use_retrieval": True,
+                "use_report": True,
+            },
+        ),
+        (
+            ["similar", "alternative", "alternatives", "recommend", "instead", "compare"],
+            {"use_recommender": True},
+        ),
+        (
+            ["look", "visual", "image", "appearance", "similar-looking"],
+            {"use_image_retrieval": True},
+        ),
+        (
+            ["summarize", "summary", "aspect"],
+            {"use_summarization": True, "use_retrieval": True},
+        ),
+        (
+            ["evaluate", "verify", "critique", "reliable", "trust", "judge"],
+            {"use_critic": True},
+        ),
+    ]
+
+    # Parallel to _RULES, same order, same length -- one short label per
+    # rule for query_type_total, kept separate rather than restructuring
+    # the existing (terms, flags) tuples above.
+    _RULE_LABELS: list[str] = [
+        "trend", "buy_decision", "competitive", "counterfactual", "topics",
+        "opinion", "aspect", "pricing", "similar_products", "visual",
+        "summarize", "critique",
+    ]
+
     def _rule_boost(self, query: str, plan: dict[str, bool]) -> dict[str, bool]:
         q = query.lower()
 
-        aspect_terms = [
-            "sound", "sound quality", "battery", "battery life", "comfort",
-            "comfortable", "durability", "durable", "build quality",
-            "material", "design", "fit", "noise cancellation",
-            "noise cancelling", "value", "worth", "price/value",
-        ]
+        matched_labels = []
+        for (terms, flags), label in zip(self._RULES, self._RULE_LABELS):
+            if self._contains_any(q, terms):
+                plan.update(flags)
+                matched_labels.append(label)
 
-        opinion_terms = [
-            "think", "opinion", "opinions", "feel", "customers", "customer",
-            "review", "reviews", "complaint", "complaints", "feedback",
-        ]
-
-        pricing_terms = [
-            "price", "expensive", "cheap", "worth", "overpriced",
-            "value", "fair price", "buy", "wait",
-        ]
-
-        recommendation_terms = [
-            "similar", "alternative", "alternatives", "recommend",
-            "instead", "compare",
-        ]
-
-        visual_terms = [
-            "look", "visual", "image", "appearance", "similar-looking",
-        ]
-
-        summary_terms = [
-            "summarize", "summary", "aspect",
-        ]
-
-        critic_terms = [
-            "evaluate", "verify", "critique", "reliable", "trust", "judge",
-        ]
-
-        topic_terms = [
-            "theme", "themes", "topic", "topics",
-            "pain point", "pain points", "common issues",
-            "common problems", "main problems",
-        ]
-
-        counterfactual_terms = [
-            "what if", "counterfactual", "would change",
-            "if rating increased", "if reviews increased",
-            "how could", "what would need to change",
-        ]
-
-        competitive_terms = [
-            "compare", "competitor", "competitors", "vs", "versus",
-            "alternative", "alternatives", "tradeoff", "tradeoffs",
-            "strengths", "weaknesses", "price performance",
-        ]
-
-        buy_terms = [
-            "should i buy", "should you buy", "buy it", "worth buying",
-            "is it worth it", "recommend this product", "would you recommend",
-        ]
-
-        trend_terms = [
-            "trend", "trends", "rising categories", "declining categories",
-            "emerging complaints", "seasonal", "seasonality",
-            "market trend", "category trend",
-        ]
-
-        if any(term in q for term in trend_terms):
-            plan["use_trends"] = True
-            plan["use_report"] = True
-
-        if any(term in q for term in buy_terms):
-            plan["use_buy_decision"] = True
-            plan["use_sentiment"] = True
-            plan["use_aspect_sentiment"] = True
-            plan["use_retrieval"] = True
-            plan["use_forecast"] = True
-            plan["use_recommender"] = True
-            plan["use_report"] = True
-
-        if any(term in q for term in competitive_terms):
-            plan["use_competitive"] = True
-            plan["use_recommender"] = True
-            plan["use_report"] = True
-
-        if any(term in q for term in counterfactual_terms):
-            plan["use_forecast"] = True
-            plan["use_counterfactuals"] = True
-            plan["use_report"] = True
-
-        if any(term in q for term in topic_terms):
-            plan["use_topics"] = True
-            plan["use_report"] = True
-
-        if any(term in q for term in opinion_terms):
-            plan["use_sentiment"] = True
-            plan["use_retrieval"] = True
-
-        if any(term in q for term in aspect_terms):
-            plan["use_aspect_sentiment"] = True
-            plan["use_retrieval"] = True
-            plan["use_summarization"] = True
-
-        if any(term in q for term in pricing_terms):
-            plan["use_forecast"] = True
-            plan["use_sentiment"] = True
-            plan["use_retrieval"] = True
-            plan["use_report"] = True
-
-        if any(term in q for term in recommendation_terms):
-            plan["use_recommender"] = True
-
-        if any(term in q for term in visual_terms):
-            plan["use_image_retrieval"] = True
-
-        if any(term in q for term in summary_terms):
-            plan["use_summarization"] = True
-            plan["use_retrieval"] = True
-
-        if any(term in q for term in critic_terms):
-            plan["use_critic"] = True
+        for label in matched_labels:
+            query_type_total.labels(query_type=label).inc()
+        if not matched_labels:
+            query_type_total.labels(query_type="unmatched").inc()
 
         return self._normalize_plan(plan)
 

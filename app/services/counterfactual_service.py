@@ -74,11 +74,81 @@ class CounterfactualService:
         return value
 
     # -----------------------------
+    # Direction labeling
+    # -----------------------------
+    def _direction_label(self, original_class: str, new_class: str) -> str:
+        """Reconstructed -- called at line 119 but never defined anywhere
+        in this file, confirmed against the original uploaded archive too,
+        not just this paste. CLASS_ORDER is defined at the top of this
+        class and used nowhere else, which is exactly what this method
+        would need it for, so this is a high-confidence reconstruction of
+        intent, not a guess pulled from nothing -- but verify it matches
+        what you actually meant by "upgrade"/"downgrade".
+        """
+        try:
+            original_idx = self.CLASS_ORDER.index(original_class)
+            new_idx = self.CLASS_ORDER.index(new_class)
+        except ValueError:
+            return "unknown"
+
+        if new_idx > original_idx:
+            return "upgrade"
+        if new_idx < original_idx:
+            return "downgrade"
+        return "unchanged"
+
+    # -----------------------------
+    # Candidate generation
+    # -----------------------------
+    def _generate_candidate_changes(self, original_class: str) -> list[tuple[str, list[float]]]:
+        """Reconstructed -- called at line 84, also never defined, also
+        confirmed missing from the original archive. This one I have much
+        lower confidence in than _direction_label: I don't know your real
+        feature distributions, so these delta magnitudes are a reasonable
+        starting guess, not a calibrated one. Review them against your
+        actual data before trusting the output.
+
+        Deltas are ordered smallest-magnitude first per feature, since
+        _search_counterfactuals breaks on the first delta that flips the
+        class -- smallest-first means it reports the smallest change that
+        works, which is the more interpretable answer ("a small change in
+        X would flip this") rather than an arbitrary larger one.
+
+        original_class steers direction: if already "high", there's
+        nothing higher to search for, so only decreases are tried (and
+        vice versa for "low"); "mid" tries both.
+        """
+        increase_only = {"low"}
+        decrease_only = {"high"}
+
+        base_deltas: dict[str, list[float]] = {
+            "review_count": [25, 50, 100, 250],
+            "avg_rating": [0.25, 0.5, 1.0],
+            "rating_std": [0.1, 0.25, 0.5],
+            "verified_purchase_ratio": [0.05, 0.1, 0.25],
+            "avg_review_length": [20, 50, 100],
+            "review_time_span": [500_000, 1_000_000, 5_000_000],
+        }
+
+        candidates: list[tuple[str, list[float]]] = []
+        for feature in self.REQUIRED_FEATURES:
+            magnitudes = base_deltas[feature]
+            deltas: list[float] = []
+
+            if original_class not in decrease_only:
+                deltas.extend(magnitudes)
+            if original_class not in increase_only:
+                deltas.extend(-m for m in magnitudes)
+
+            candidates.append((feature, deltas))
+
+        return candidates
+
+    # -----------------------------
     # Counterfactual search
     # -----------------------------
-    def _search_counterfactuals(self, product_data: dict) -> list[dict]:
+    def _search_counterfactuals(self, product_data: dict, original_class: str) -> list[dict]:
         with self.tracer.start_as_current_span("counterfactual.search") as span:
-            original_class = self._predict_class(product_data)
             span.set_attribute("original_class", original_class)
 
             candidate_changes = self._generate_candidate_changes(original_class)
@@ -140,7 +210,7 @@ class CounterfactualService:
             original_class = self._predict_class(product_data)
             span.set_attribute("original_class", original_class)
 
-            counterfactuals = self._search_counterfactuals(product_data)
+            counterfactuals = self._search_counterfactuals(product_data, original_class)
 
             if counterfactuals:
                 logger.info(f"Generated {len(counterfactuals)} counterfactuals")

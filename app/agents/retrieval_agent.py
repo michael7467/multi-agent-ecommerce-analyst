@@ -9,7 +9,8 @@ class RetrievalAgent(BaseAgent):
     def __init__(self) -> None:
         super().__init__(name="RetrievalAgent")
         self.rag_service = RAGService()
-    @traced_agent("RetrievalAgent")
+
+    @traced_agent("RetrievalAgent.run")
     def run(self, product_id: str, query: str, top_k: int = 3) -> dict:
         evidence = self.rag_service.get_product_evidence(
             product_id=product_id,

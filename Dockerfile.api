@@ -34,6 +34,23 @@ COPY . /app
 # Create non-root user
 # ---------------------------------------------------------
 RUN useradd -m appuser
+
+# Named volumes (product_memory, qdrant_storage) get created root-owned by
+# the Docker daemon on first use, and USER below means the app never runs
+# as root again to fix that itself. A NEW volume inherits ownership from
+# whatever's already at the mount path in the image at the time it's first
+# mounted -- so the mkdir has to happen before USER appuser.
+#
+# The chown is deliberately scoped to the whole /app tree, not just
+# artifacts/ -- COPY . /app above runs as root with no --chown flag, so
+# EVERYTHING it copied in (including data/eval/, where the evaluation
+# judges write their cache files) stayed root-owned too. A narrower chown
+# limited to artifacts/ was what caused a real PermissionError on
+# data/eval/faithfulness_cache.json -- the underlying cause is broader
+# than just the two volume mount points, so the fix needs to be too.
+RUN mkdir -p /app/artifacts/memory /app/artifacts/qdrant_storage && \
+    chown -R appuser:appuser /app
+
 USER appuser
 
 EXPOSE 8000

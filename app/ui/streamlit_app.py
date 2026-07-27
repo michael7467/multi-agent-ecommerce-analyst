@@ -13,6 +13,21 @@ from app.logging.logger import get_logger
 logger = get_logger("ui.streamlit")
 setup_tracing()
 
+
+def _safe_float(value, default: float = 0.0) -> float:
+    # float(x) and inline {x:.4f} both raise outright on a non-numeric
+    # value -- confirmed the same crash class fixed repeatedly elsewhere
+    # this session (report_service.py, summarization_service.py,
+    # critic_agent.py) applies here too. main()'s except Exception would
+    # catch it, but that turns one section's bad score into the whole
+    # page failing to render instead of just that one card showing 0.00.
+    try:
+        result = float(value)
+    except (TypeError, ValueError):
+        return default
+    return default if result != result else result  # result != result is the NaN check, no math import needed for one use
+
+
 st.set_page_config(
     page_title="Multi-Agent E-commerce AI Analyst",
     page_icon="🛍️",
@@ -142,10 +157,10 @@ def render_sentiment(output: dict) -> None:
     st.subheader("Sentiment Overview")
 
     sentiment = output.get("sentiment", {})
-    avg_score = float(sentiment.get("avg_sentiment_score", 0.0))
-    pos = float(sentiment.get("positive_review_ratio", 0.0))
-    neu = float(sentiment.get("neutral_review_ratio", 0.0))
-    neg = float(sentiment.get("negative_review_ratio", 0.0))
+    avg_score = _safe_float(sentiment.get("avg_sentiment_score", 0.0))
+    pos = _safe_float(sentiment.get("positive_review_ratio", 0.0))
+    neu = _safe_float(sentiment.get("neutral_review_ratio", 0.0))
+    neg = _safe_float(sentiment.get("negative_review_ratio", 0.0))
 
     col1, col2, col3, col4 = st.columns(4)
 
@@ -179,7 +194,7 @@ def render_aspect_sentiment(output: dict) -> None:
     for aspect, payload in aspect_sentiment.items():
         label = aspect.replace("_", " ").title()
         sentiment_label = payload.get("label", "unknown")
-        score = float(payload.get("score", 0.0))
+        score = _safe_float(payload.get("score", 0.0))
         method = payload.get("method", "")
 
         st.write(
@@ -247,7 +262,7 @@ def render_evidence(output: dict) -> None:
 
     for i, ev in enumerate(evidence, start=1):
         title = ev.get("review_title", "") or f"Evidence {i}"
-        score = float(ev.get("score", 0.0))
+        score = _safe_float(ev.get("score", 0.0))
 
         with st.expander(f"Evidence {i} — Score: {score:.4f}"):
             st.write(f"**Review Title:** {title}")
@@ -266,7 +281,7 @@ def render_recommendations(output: dict) -> None:
         return
 
     for i, item in enumerate(recommendations, start=1):
-        score = float(item.get("similarity_score", 0.0))
+        score = _safe_float(item.get("similarity_score", 0.0))
         with st.expander(f"Recommendation {i} — Similarity: {score:.4f}"):
             st.write(f"**Product ID:** {item.get('product_id', '')}")
             st.write(f"**Title:** {item.get('title', '')}")
@@ -291,7 +306,7 @@ def render_image_similar_products(output: dict) -> None:
         return
 
     for i, item in enumerate(items, start=1):
-        score = float(item.get("similarity_score", 0.0))
+        score = _safe_float(item.get("similarity_score", 0.0))
         with st.expander(f"Visual Match {i} — Similarity: {score:.4f}"):
             st.write(f"**Product ID:** {item.get('product_id', '')}")
             st.write(f"**Title:** {item.get('title', '')}")
@@ -308,8 +323,8 @@ def render_topics(output: dict) -> None:
         return
 
     for theme in themes:
-        st.write(f"**{theme['topic_name']}** (count={theme['count']})")
-        st.write(theme["keywords"])
+        st.write(f"**{theme.get('topic_name', '')}** (count={theme.get('count', 0)})")
+        st.write(theme.get("keywords", ""))
 
 
 def render_pain_points(output: dict) -> None:
@@ -321,8 +336,8 @@ def render_pain_points(output: dict) -> None:
         return
 
     for point in points:
-        st.write(f"**{point['topic_name']}**")
-        st.write(point["keywords"])
+        st.write(f"**{point.get('topic_name', '')}**")
+        st.write(point.get("keywords", ""))
 
 
 def render_counterfactuals(output: dict) -> None:
@@ -381,7 +396,7 @@ def render_competitive_analysis(output: dict) -> None:
                 st.write(f"**Price:** {comp.get('price', 'N/A')}")
                 st.write(f"**Predicted Class:** {str(comp.get('predicted_class', '')).upper()}")
                 st.write(f"**Average Sentiment:** {comp.get('avg_sentiment', 'N/A')}")
-                st.write(f"**Similarity Score:** {comp.get('similarity_score', 0.0):.4f}")
+                st.write(f"**Similarity Score:** {_safe_float(comp.get('similarity_score', 0.0)):.4f}")
 
     st.markdown("---")
     st.write("**Key Insights**")

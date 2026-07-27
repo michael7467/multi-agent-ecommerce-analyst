@@ -14,10 +14,7 @@ logger = get_logger("api.analysis")
 
 
 def _get_trace_id() -> str | None:
-    span = get_current_span()
-    if not span:
-        return None
-    ctx = span.get_span_context()
+    ctx = get_current_span().get_span_context()
     if not ctx or ctx.trace_id == 0:
         return None
     return format(ctx.trace_id, "032x")
@@ -57,6 +54,7 @@ def analyze_product(
         except Exception as exc:
             logger.error(
                 "Invalid orchestrator response",
+                exc_info=True,
                 extra={
                     "result": result,
                     "trace_id": trace_id,
@@ -82,6 +80,7 @@ def analyze_product(
     except Exception as exc:
         logger.error(
             "Analysis failed",
+            exc_info=True,
             extra={
                 "error": str(exc),
                 "product_id": payload.product_id,

@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   api:
     build:
@@ -9,10 +7,18 @@ services:
     ports:
       - "8000:8000"
     environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
       REDIS_URL: redis://redis:6379/0
       OTEL_SERVICE_NAME: multi-agent-ecommerce-analyst-api
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
-      OTEL_TRACES_EXPORTER_MODE: console
+      OTEL_TRACES_EXPORTER_MODE: otlp
+      PRODUCT_MEMORY_PATH: /app/artifacts/memory/product_memory.db
+      QDRANT_STORAGE_PATH: /app/artifacts/qdrant_storage
+      EVAL_HISTORY_DB_PATH: /app/artifacts/eval_history/eval_runs.db
+    volumes:
+      - product_memory:/app/artifacts/memory
+      - qdrant_storage:/app/artifacts/qdrant_storage
+      - eval_history:/app/artifacts/eval_history
     depends_on:
       redis:
         condition: service_healthy
@@ -28,10 +34,18 @@ services:
     ports:
       - "8501:8501"
     environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
       REDIS_URL: redis://redis:6379/0
       OTEL_SERVICE_NAME: multi-agent-ecommerce-analyst-ui
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
-      OTEL_TRACES_EXPORTER_MODE: console
+      OTEL_TRACES_EXPORTER_MODE: otlp
+      PRODUCT_MEMORY_PATH: /app/artifacts/memory/product_memory.db
+      QDRANT_STORAGE_PATH: /app/artifacts/qdrant_storage
+      EVAL_HISTORY_DB_PATH: /app/artifacts/eval_history/eval_runs.db
+    volumes:
+      - product_memory:/app/artifacts/memory
+      - qdrant_storage:/app/artifacts/qdrant_storage
+      - eval_history:/app/artifacts/eval_history
     depends_on:
       redis:
         condition: service_healthy
@@ -42,8 +56,11 @@ services:
   redis:
     image: redis:7
     container_name: redis
-    ports:
-      - "6379:6379"
+    # No host port mapping -- api/streamlit only ever need redis://redis:6379
+    # over the internal network. Exposing this to the host is unauthenticated
+    # Redis reachable outside the compose network for no corresponding benefit.
+    # Add "6379:6379" back only if you specifically need host-side redis-cli
+    # access for local debugging.
     volumes:
       - redis_data:/data
     healthcheck:
@@ -55,7 +72,7 @@ services:
     networks:
       - backend
 
-# Optional: OpenTelemetry collector (recommended)
+  # Optional: OpenTelemetry collector (recommended)
   otel-collector:
     image: otel/opentelemetry-collector:latest
     container_name: otel-collector
@@ -70,6 +87,24 @@ services:
 
 volumes:
   redis_data:
+  # Shared between api and streamlit so both see the same product_memory.db
+  # and it survives container restarts. This fixes data loss and the
+  # split-brain problem (each service otherwise had its own separate,
+  # ephemeral SQLite file) -- it does NOT fix the deeper issue that SQLite
+  # isn't really designed for concurrent multi-process writers. Two
+  # containers can still race writing to this file; a real database
+  # server is the actual fix for that, this just stops losing data on restart.
+  product_memory:
+  # Same reasoning, same fix, for the embedded Qdrant instance -- qdrant_mode
+  # defaults to "local" (on-disk, no separate server), so without this the
+  # review-embeddings collection would be rebuilt from nothing, separately,
+  # in each container, and lost on every restart.
+  qdrant_storage:
+  # Same reasoning again -- the eval history SQLite DB is created at
+  # runtime by app/evaluation/eval_history.py, not baked into the image.
+  # Without this, "track results across runs" would silently stop working
+  # on every rebuild, defeating the entire point of this feature.
+  eval_history:
 
 networks:
   backend:

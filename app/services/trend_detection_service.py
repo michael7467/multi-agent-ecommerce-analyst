@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+import re
 import pandas as pd
 from app.config.paths import FEATURES_PATH, REVIEWS_PATH
-
+from app.agents.data_agent import _load_features_df
 
 
 class TrendDetectionService:
     def __init__(self) -> None:
-        self.features_df = pd.read_csv(FEATURES_PATH)
+        # Shared cache -- see _load_features_df in data_agent.py. Without
+        # this, every independent construction of this service re-reads
+        # and re-parses the same features CSV that DataAgent (and now this
+        # service) both need.
+        self.features_df = _load_features_df()
         self.reviews_df = pd.read_csv(REVIEWS_PATH)
 
     def analyze(self) -> dict:
@@ -19,15 +24,7 @@ class TrendDetectionService:
         df["review_timestamp"] = pd.to_numeric(df["review_timestamp"], errors="coerce")
         df = df.dropna(subset=["review_timestamp"]).copy()
 
-        df["review_datetime"] = pd.to_datetime(df["review_timestamp"], unit="ms", errors="coerce")
-
-        missing_dt = df["review_datetime"].isna()
-        if missing_dt.any():
-            df.loc[missing_dt, "review_datetime"] = pd.to_datetime(
-                df.loc[missing_dt, "review_timestamp"],
-                unit="s",
-                errors="coerce",
-            )
+        df["review_datetime"] = self._parse_review_datetime(df["review_timestamp"])
 
         df = df.dropna(subset=["review_datetime"]).copy()
         df["year_month"] = df["review_datetime"].dt.to_period("M").astype(str)
@@ -52,6 +49,37 @@ class TrendDetectionService:
             "seasonal_patterns": seasonal_patterns,
             "emerging_complaints": emerging_complaints,
         }
+
+    def _parse_review_datetime(self, timestamps: pd.Series) -> pd.Series:
+        """Unix timestamps here can apparently be seconds or milliseconds.
+
+        The previous approach parsed as milliseconds first and fell back to
+        seconds only where that produced NaT. That fallback never actually
+        fires for the realistic case: a genuine seconds-timestamp (e.g.
+        Amazon's unixReviewTime format, which review_timestamp very likely
+        comes from -- see reviews_loader.py's COLUMN_CANDIDATES) misread as
+        milliseconds doesn't error or go out of range, it silently lands on
+        some valid-but-wrong date a few weeks after epoch. Verified: every
+        realistic 2015-2024 seconds-timestamp parses "successfully" as ms
+        to a January-1970 date, no NaT produced, so the seconds fallback
+        never triggers and every review silently gets the wrong date.
+
+        Detecting the unit from magnitude instead: seconds-since-epoch for
+        any real-world date is at most ~2e9 (year 2033ish); nothing that
+        small can plausibly be milliseconds for a post-2000 date, where
+        milliseconds values start around 9.5e11. The two ranges don't
+        overlap, so this is unambiguous rather than a guess.
+        """
+        is_seconds = timestamps.abs() < 1e11
+
+        result = pd.Series(pd.NaT, index=timestamps.index, dtype="datetime64[ns]")
+        result.loc[is_seconds] = pd.to_datetime(
+            timestamps[is_seconds], unit="s", errors="coerce"
+        )
+        result.loc[~is_seconds] = pd.to_datetime(
+            timestamps[~is_seconds], unit="ms", errors="coerce"
+        )
+        return result
 
     def _monthly_category_counts(self, df: pd.DataFrame) -> pd.DataFrame:
         return (
@@ -155,7 +183,8 @@ class TrendDetectionService:
 
         rows = []
         for keyword in complaint_keywords:
-            matched = temp[temp["review_text"].str.contains(keyword, na=False)]
+            pattern = r"\b" + re.escape(keyword) + r"\b"
+            matched = temp[temp["review_text"].str.contains(pattern, regex=True, na=False)]
             if matched.empty:
                 continue
 

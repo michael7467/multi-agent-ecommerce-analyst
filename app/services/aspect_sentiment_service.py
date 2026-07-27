@@ -85,14 +85,12 @@ class AspectSentimentService:
 
         try:
             result = self.classifier(text, candidate_labels=candidate_labels, multi_label=False)
+            raw_label = result["labels"][0]
+            score = float(result["scores"][0])
+            final_label = self._normalize_label(raw_label)
         except Exception:
             logger.error("Zero-shot classifier failed", exc_info=True)
-            return {"aspect": aspect, "label": "mixed", "score": 0.5, "method": "zero_shot"}
-
-        raw_label = result["labels"][0]
-        score = float(result["scores"][0])
-
-        final_label = self._normalize_label(raw_label)
+            return {"aspect": aspect, "label": "mixed", "score": 0.5, "method": "zero_shot_fallback"}
 
         return {
             "aspect": aspect,
@@ -134,12 +132,16 @@ Return:
         try:
             raw = self.llm.generate_text(prompt)
             parsed = json.loads(raw)
+            final_label = self._normalize_label(parsed.get("label", "mixed"))
+            score = float(parsed.get("score", 0.5))
         except Exception:
-            logger.error("LLM returned invalid JSON", exc_info=True)
-            return {"aspect": aspect, "label": "mixed", "score": 0.5, "method": "llm"}
-
-        final_label = self._normalize_label(parsed.get("label", "mixed"))
-        score = float(parsed.get("score", 0.5))
+            # Covers a malformed/missing JSON response AND a present but
+            # non-numeric "score" (e.g. the LLM returns "score": "high") --
+            # the latter used to sit outside this try/except, so a
+            # well-formed-but-wrong-shaped response would raise uncaught
+            # instead of falling back like an actually-malformed one did.
+            logger.error("LLM returned an unusable aspect sentiment response", exc_info=True)
+            return {"aspect": aspect, "label": "mixed", "score": 0.5, "method": "llm_fallback"}
 
         return {
             "aspect": aspect,

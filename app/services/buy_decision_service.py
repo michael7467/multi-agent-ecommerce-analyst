@@ -70,8 +70,12 @@ class BuyDecisionService:
                 not_recommended_for.append("users who care deeply about premium sound fidelity")
 
             # --- Build quality ---
-            if build_quality == "negative":
+            if build_quality == "positive":
+                pros.append("build quality is a clear strength")
+                recommended_for.append("users who want a sturdy, durable product")
+            elif build_quality == "negative":
                 cons.append("build quality may not feel strong enough for some users")
+                not_recommended_for.append("users who prioritize rugged or long-term durability")
 
             # --- Price-value ---
             if price_value == "positive":
@@ -104,6 +108,7 @@ class BuyDecisionService:
                 comfort=comfort,
                 battery=battery,
                 price_value=price_value,
+                build_quality=build_quality,
             )
 
             summary = self._build_summary(
@@ -124,13 +129,18 @@ class BuyDecisionService:
                 "evidence_count": len(evidence),
             }
 
-    def _decide_label(self, avg_sentiment, sound, comfort, battery, price_value) -> str:
-        strong_positive = sum(label == "positive" for label in [sound, comfort, battery, price_value])
-        weak_or_negative = sum(label in {"negative", "mixed"} for label in [sound, comfort, battery, price_value])
+    def _decide_label(self, avg_sentiment, sound, comfort, battery, price_value, build_quality) -> str:
+        aspects = [sound, comfort, battery, price_value, build_quality]
+        strong_positive = sum(label == "positive" for label in aspects)
+        weak_or_negative = sum(label in {"negative", "mixed"} for label in aspects)
 
-        if avg_sentiment >= 0.75 and strong_positive >= 2:
+        # Proportions, not hard-coded counts -- the original thresholds
+        # (>=2 of 4, >=3 of 4) were exactly half and exactly three-quarters.
+        # Expressing them that way means adding a 6th aspect later won't
+        # silently loosen the bar the way a missing 5th one just did.
+        if avg_sentiment >= 0.75 and strong_positive >= len(aspects) / 2:
             return "recommended"
-        if avg_sentiment < 0.45 or weak_or_negative >= 3:
+        if avg_sentiment < 0.45 or weak_or_negative >= len(aspects) * 0.75:
             return "not recommended"
         return "conditionally recommended"
 

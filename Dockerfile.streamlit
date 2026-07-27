@@ -19,14 +19,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # ---------------------------------------------------------
 # Install Python dependencies (cached layer)
 # ---------------------------------------------------------
-COPY requirements-base.txt requirements-streamlit.txt requirements-api.txt requirements-ml.txt /app/
+COPY requirements-base.txt requirements-streamlit.txt requirements-api.txt /app/
 
 RUN pip install --no-cache-dir --upgrade pip==24.0 && \
     pip install --no-cache-dir \
         -r requirements-base.txt \
         -r requirements-streamlit.txt \
-        -r requirements-api.txt \
-        -r requirements-ml.txt
+        -r requirements-api.txt
 
 # ---------------------------------------------------------
 # Copy application code
@@ -37,6 +36,13 @@ COPY . /app
 # Create non-root user
 # ---------------------------------------------------------
 RUN useradd -m appuser
+
+# Same reasoning as Dockerfile.api -- see the comment there. Scoped to the
+# whole /app tree now, not just artifacts/ -- COPY . /app leaves everything
+# root-owned, including data/eval/ where evaluation cache files get written.
+RUN mkdir -p /app/artifacts/memory /app/artifacts/qdrant_storage && \
+    chown -R appuser:appuser /app
+
 USER appuser
 
 EXPOSE 8501

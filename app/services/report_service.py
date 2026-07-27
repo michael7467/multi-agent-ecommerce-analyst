@@ -1,10 +1,26 @@
 from __future__ import annotations
 
+import math
+
 from app.models.llm.llm_client import LLMClient
 from app.logging.logger import get_logger
 from app.observability.tracing import get_tracer
+from app.services.class_alignment import check_class_alignment
 
 logger = get_logger("report.service")
+
+
+def _safe_float(value, default: float = 0.0) -> float:
+    # {value:.4f} raises outright if value is ever a non-numeric type (e.g.
+    # a string) -- confirmed this exact crash while fixing the identical
+    # pattern in summarization_service.py. Three separate score fields in
+    # this file used the unguarded version.
+    try:
+        result = float(value)
+    except (TypeError, ValueError):
+        return default
+    return default if math.isnan(result) else result
+
 
 class ReportService:
     def __init__(self) -> None:
@@ -27,10 +43,10 @@ class ReportService:
             aspect_summaries = analysis_result.get("aspect_summaries", {})
 
             sentiment = analysis_result.get("sentiment", {})
-            avg_sentiment_score = sentiment.get("avg_sentiment_score", 0.0)
-            positive_review_ratio = sentiment.get("positive_review_ratio", 0.0)
-            neutral_review_ratio = sentiment.get("neutral_review_ratio", 0.0)
-            negative_review_ratio = sentiment.get("negative_review_ratio", 0.0)
+            avg_sentiment_score = _safe_float(sentiment.get("avg_sentiment_score", 0.0))
+            positive_review_ratio = _safe_float(sentiment.get("positive_review_ratio", 0.0))
+            neutral_review_ratio = _safe_float(sentiment.get("neutral_review_ratio", 0.0))
+            negative_review_ratio = _safe_float(sentiment.get("negative_review_ratio", 0.0))
 
             evidence_text = []
             for i, ev in enumerate(evidence, start=1):
@@ -38,7 +54,7 @@ class ReportService:
                     f"""Evidence {i}:
     Review title: {ev.get("review_title", "")}
     Review text: {ev.get("review_text", "")}
-    Similarity score: {ev.get("score", 0):.4f}
+    Similarity score: {_safe_float(ev.get("score", 0)):.4f}
     """
                 )
 
@@ -48,7 +64,7 @@ class ReportService:
                     f"""Recommendation {i}:
     Product ID: {rec.get("product_id", "")}
     Title: {rec.get("title", "")}
-    Similarity score: {rec.get("similarity_score", 0):.4f}
+    Similarity score: {_safe_float(rec.get("similarity_score", 0)):.4f}
     Predicted class: {rec.get("predicted_class", "")}
     """
                 )
@@ -59,7 +75,7 @@ class ReportService:
                     f"""Visual Match {i}:
     Product ID: {item.get("product_id", "")}
     Title: {item.get("title", "")}
-    Similarity score: {item.get("similarity_score", 0):.4f}
+    Similarity score: {_safe_float(item.get("similarity_score", 0)):.4f}
     """
                 )
 
@@ -122,25 +138,39 @@ class ReportService:
             predicted_class = analysis_result.get("predicted_class", None)
             span.set_attribute("predicted_class", str(predicted_class))
 
-            try:
-                prompt = self._build_prompt(analysis_result)
-            except Exception:
-                logger.error("Failed to build report prompt", exc_info=True)
-                return "The system could not generate a report due to malformed analysis data."
+            # Both of the try/excepts below used to catch their failure and
+            # return a placeholder string instead of raising. That string
+            # is non-empty, so it's truthy -- which meant a genuine LLM
+            # failure or a malformed analysis_result would sail straight
+            # past dynamic_orchestrator.py's `if report.get("report"):`
+            # guard (added a few turns ago specifically to stop a *failed*
+            # report from being treated as a real one) and get set as
+            # analysis["report"] anyway, then persisted to memory/history
+            # as if it were a genuine report. Non-critical failures are
+            # supposed to show up in failed_steps -- a placeholder that
+            # looks like success does the opposite of that. Letting these
+            # propagate is what makes that guard actually work.
+            prompt = self._build_prompt(analysis_result)
 
             logger.debug(f"Report prompt length: {len(prompt)} characters")
 
-            try:
-                report = self.llm.generate_text(prompt)
-            except Exception:
-                logger.error("LLM generation failed", exc_info=True)
-                return "The system could not generate a report due to an LLM error."
+            report = self.llm.generate_text(prompt)
 
-            # Safety check
+            # Alignment check, using the same synonym/contradiction-aware
+            # logic as GuardrailAgent instead of a separate, cruder
+            # substring check that used to live here independently. Only
+            # gates on an actual contradiction ("failed"), not mere
+            # silence ("uncertain") -- a report that simply doesn't repeat
+            # the price tier back isn't necessarily wrong, and discarding
+            # an otherwise-good, evidence-based report for a generic
+            # canned message every time that happens is a worse outcome
+            # for whoever reads it than letting it through.
             if predicted_class is not None:
-                if str(predicted_class).lower() not in report.lower():
+                alignment = check_class_alignment(str(predicted_class), report)
+                if alignment["status"] == "failed":
                     logger.warning(
-                        f"LLM omitted predicted_class={predicted_class}; returning safe fallback."
+                        f"Report contradicts predicted_class={predicted_class}: "
+                        f"{alignment['reasons']}"
                     )
                     span.set_attribute("fallback_triggered", True)
 

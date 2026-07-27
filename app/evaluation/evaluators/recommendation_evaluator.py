@@ -3,12 +3,17 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from app.agents.orchestrator import Orchestrator
+# Was app.agents.orchestrator.Orchestrator -- same legacy-orchestrator issue
+# fixed in agent_eval.py. This one already used .get() with defaults, so it
+# wouldn't have crashed on DynamicOrchestrator's conditional fields the way
+# agent_eval.py did, but it was still evaluating a decision rule against a
+# pipeline that doesn't have any of this session's fault-tolerance work in it.
+from app.agents.dynamic_orchestrator import DynamicOrchestrator
 
 
 class RecommendationEvaluator:
     def __init__(self) -> None:
-        self.orchestrator = Orchestrator()
+        self.orchestrator = DynamicOrchestrator()
 
     @staticmethod
     def simple_recommendation_rule(final_output: dict) -> str:

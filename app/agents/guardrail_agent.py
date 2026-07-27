@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-import re
 from app.agents.base_agent import BaseAgent
 from app.logging.logger import get_logger
 from app.observability.agent_tracing import traced_agent
+from app.services.class_alignment import check_class_alignment
 
 logger = get_logger("agents.guardrail")
+
 
 class GuardrailAgent(BaseAgent):
     def __init__(self) -> None:
@@ -18,15 +19,13 @@ class GuardrailAgent(BaseAgent):
         if not isinstance(report, str):
             raise ValueError("GuardrailAgent: report must be a string")
 
-        pattern = r"\b" + re.escape(predicted_class.lower()) + r"\b"
-        aligned = bool(re.search(pattern, report.lower()))
+        result = check_class_alignment(predicted_class, report)
 
-        if not aligned:
+        if result["status"] != "passed":
             logger.info(
-                f"{self.name}: alignment failed for predicted_class='{predicted_class}'"
+                f"{self.name}: alignment check '{result['status']}' for "
+                f"predicted_class='{predicted_class}'",
+                extra={"reasons": result["reasons"]},
             )
 
-        return {
-            "is_aligned": aligned,
-            "status": "passed" if aligned else "failed"
-        }
+        return result

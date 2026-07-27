@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 import pandas as pd
 
@@ -39,14 +40,24 @@ class TopicAgent(BaseAgent):
         pain_keywords = [
             "issue", "issues", "problem", "problems", "broken", "broke",
             "bad", "poor", "damage", "damaged", "defect", "defective",
-            "return", "refund", "weak", "noise", "hollow", "disconnect",
+            "return", "refund", "weak", "noisy", "hollow", "disconnect",
             "slow", "fail", "failed"
         ]
+        # "noise" (not "noisy") used to be on this list. Word-boundary
+        # matching alone doesn't fix it: "noise" is a real whole word
+        # inside "noise cancellation" / "noise cancelling", which are
+        # normally positive feature topics for this product category, not
+        # complaints. "noisy" doesn't have that collision.
+
+        def is_pain_topic(keywords: str) -> bool:
+            kw = str(keywords).lower()
+            return any(
+                re.search(r"\b" + re.escape(term) + r"\b", kw)
+                for term in pain_keywords
+            )
 
         df = df.copy()
-        df["is_pain"] = df["keywords"].str.lower().apply(
-            lambda kw: any(term in kw for term in pain_keywords)
-        )
+        df["is_pain"] = df["keywords"].apply(is_pain_topic)
 
         pain_df = df[df["is_pain"]].sort_values(by="count", ascending=False)
 
@@ -65,10 +76,10 @@ class TopicAgent(BaseAgent):
         if not isinstance(top_k, int) or top_k <= 0:
             raise ValueError("TopicAgent: top_k must be a positive integer")
 
-        df = self.topic_df.copy()
-
-        if "count" in df.columns:
-            df = df.sort_values(by="count", ascending=False)
+        # "count" is guaranteed present (validated in __init__), and
+        # sort_values() already returns an independent object -- no need
+        # to copy self.topic_df first just to immediately discard it.
+        df = self.topic_df.sort_values(by="count", ascending=False)
 
         top_themes = [
             {

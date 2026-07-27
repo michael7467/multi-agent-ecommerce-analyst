@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from app.evaluation.retrieval_precision_eval import run_retrieval_precision_eval
-from app.evaluation.recommendation_eval import run_recommendation_eval
+from app.evaluation.evaluators.retrieval_evaluator import run_retrieval_eval
+from app.evaluation.evaluators.recommendation_evaluator import run_recommendation_eval
 
 
 def run_all_advanced_evals() -> None:
     print("\n==============================")
     print("Running Retrieval Precision@K")
     print("==============================")
-    run_retrieval_precision_eval(top_k=3)
+    run_retrieval_eval(top_k=3)
 
     print("\n==============================")
     print("Running Recommendation Eval")

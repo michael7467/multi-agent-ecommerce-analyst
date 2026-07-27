@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pandas as pd
 from nltk.sentiment import SentimentIntensityAnalyzer
+from app.config.paths import REVIEWS_PATH, SENTIMENT_FEATURES_PATH
 
 
 class SentimentFeatureBuilder:
@@ -43,8 +44,8 @@ class SentimentFeatureBuilder:
 
 
 def save_sentiment_features(
-    input_path: str = "data/interim/reviews_electronics_clean.csv",
-    output_path: str = "data/processed/electronics_sentiment_features.csv",
+    input_path: str = REVIEWS_PATH,
+    output_path: str = SENTIMENT_FEATURES_PATH,
 ) -> pd.DataFrame:
     reviews_df = pd.read_csv(input_path)
 

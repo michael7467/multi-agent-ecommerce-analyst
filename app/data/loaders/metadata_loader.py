@@ -11,10 +11,10 @@ class MetadataLoader:
     Load local metadata from JSONL/CSV/Parquet and normalize columns.
     """
 
+    # Same reasoning as reviews_loader.py's COLUMN_CANDIDATES -- see the
+    # comment there. product_id excluded from this rename loop; it's built
+    # by copying from parent_asin/asin in the fallback below instead.
     COLUMN_CANDIDATES = {
-        "product_id": ["parent_asin", "asin"],
-        "asin": ["asin"],
-        "parent_asin": ["parent_asin"],
         "title": ["title"],
         "brand": ["brand"],
         "price": ["price"],

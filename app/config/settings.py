@@ -63,7 +63,18 @@ class Settings(BaseSettings):
     # Security
     api_key: str | None = None
     rate_limit_per_minute: int = 60
+    cors_allowed_origins: str = ""
 
     rate_limit_overrides: dict[str, int] = Field(default_factory=dict)
+
+    @property
+    def cors_allowed_origins_list(self) -> list[str]:
+        """Comma-separated origins from env/config, parsed into a list.
+
+        Defaults to empty (no origins allowed) rather than "*" -- CORS should
+        fail closed, since an empty allowlist is safe by default and just
+        needs to be set explicitly per environment.
+        """
+        return [o.strip() for o in self.cors_allowed_origins.split(",") if o.strip()]
 
 settings = Settings()

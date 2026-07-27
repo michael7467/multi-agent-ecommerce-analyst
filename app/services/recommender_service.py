@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from threading import Lock
+
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
@@ -11,24 +13,70 @@ from app.config.paths import FEATURES_PATH
 
 logger = get_logger("recommender.service")
 
+_RECOMMENDER_STATE: tuple[pd.DataFrame, TfidfVectorizer, object] | None = None
+_RECOMMENDER_LOCK = Lock()
+
+
+def _load_recommender_state() -> tuple[pd.DataFrame, TfidfVectorizer, object]:
+    """Loads the features table AND fits the TF-IDF matrix once per
+    process, shared across every RecommenderService instance.
+
+    This is a more expensive version of the same problem fixed in
+    data_agent.py / sentiment_agent.py / trend_detection_service.py --
+    CompetitiveService constructs its own RecommenderService too, and
+    each independent construction wasn't just re-reading the CSV, it was
+    re-fitting an entire TfidfVectorizer over the whole product catalog
+    from scratch.
+
+    Uses real double-checked locking (Lock(), checked outside for the
+    fast path, checked again inside before building) rather than the
+    simpler check-then-set pattern used for the other caches -- that
+    one has a narrow race on the very first concurrent construction; this
+    doesn't, matching the pattern already used correctly in
+    qdrant_client_manager.py.
+    """
+    global _RECOMMENDER_STATE
+
+    if _RECOMMENDER_STATE is not None:
+        return _RECOMMENDER_STATE
+
+    with _RECOMMENDER_LOCK:
+        if _RECOMMENDER_STATE is not None:
+            return _RECOMMENDER_STATE
+
+        df = pd.read_csv(FEATURES_PATH)
+
+        # Explicit, not incidental: text_matrix's rows are built in
+        # positional order, and product_idx (looked up by label below) is
+        # used directly as a position into it. A fresh read_csv() already
+        # produces a clean 0..n-1 range index today, so this line changes
+        # nothing right now -- it's here so that stays true even if a
+        # filter (e.g. dropping invalid rows) ever gets added above this
+        # line, which would otherwise silently misalign labels vs.
+        # positions without changing anything's type or raising any error.
+        df = df.reset_index(drop=True)
+
+        for col in ["title", "categories", "description"]:
+            if col in df.columns:
+                df[col] = df[col].fillna("").astype(str)
+
+        df["combined_text"] = (
+            df["title"] + " " +
+            df["categories"] + " " +
+            df["description"]
+        )
+
+        vectorizer = TfidfVectorizer(max_features=5000, ngram_range=(1, 2))
+        text_matrix = vectorizer.fit_transform(df["combined_text"])
+
+        _RECOMMENDER_STATE = (df, vectorizer, text_matrix)
+
+    return _RECOMMENDER_STATE
+
 
 class RecommenderService:
     def __init__(self) -> None:
-        self.df = pd.read_csv(FEATURES_PATH).copy()
-
-        for col in ["title", "categories", "description"]:
-            if col in self.df.columns:
-                self.df[col] = self.df[col].fillna("").astype(str)
-
-        self.df["combined_text"] = (
-            self.df["title"] + " " +
-            self.df["categories"] + " " +
-            self.df["description"]
-        )
-
-        self.vectorizer = TfidfVectorizer(max_features=5000, ngram_range=(1, 2))
-        self.text_matrix = self.vectorizer.fit_transform(self.df["combined_text"])
-
+        self.df, self.vectorizer, self.text_matrix = _load_recommender_state()
         self.tracer = get_tracer("app.recommender_service")
 
     def recommend_similar_products(self, product_id: str, top_k: int = 5) -> list[dict]:

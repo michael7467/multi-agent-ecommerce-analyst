@@ -26,7 +26,12 @@ from app.observability.metrics import (
     CACHE_MISSES_TOTAL,
     IN_PROGRESS_ANALYSIS,
     REPORT_LATENCY_SECONDS,
+    agent_execution_seconds,
+    agent_errors_total,
+    agent_validation_failures_total,
+    critic_hallucination_rate,
 )
+from app.evaluation.metrics.generation_metrics import hallucination_rate_from_critic_scores
 from app.agents.buy_decision_agent import BuyDecisionAgent
 from app.agents.competitive_agent import CompetitiveAgent
 from app.agents.trend_agent import TrendAgent
@@ -40,10 +45,7 @@ logger = get_logger("orchestrator")
 
 
 def _get_trace_id() -> str | None:
-    span = get_current_span()
-    if not span:
-        return None
-    ctx = span.get_span_context()
+    ctx = get_current_span().get_span_context()
     if not ctx or ctx.trace_id == 0:
         return None
     return format(ctx.trace_id, "032x")
@@ -72,20 +74,42 @@ class DynamicOrchestrator:
         self.trend_agent = TrendAgent()
         self.tracer = get_tracer("app.dynamic_orchestrator")
 
-    def _safe_agent_call(self, name: str, fn, **kwargs):
+    def _safe_agent_call(
+        self,
+        name: str,
+        fn,
+        *,
+        critical: bool = True,
+        failed_steps: list[str] | None = None,
+        **kwargs,
+    ):
         """
         Wraps each agent call with:
         - tracing
         - structured logging
-        - graceful fallback
         - error isolation
+        - graceful fallback for non-critical steps
+
+        Critical steps (critical=True, the default) re-raise on failure and
+        abort the whole request -- there's nothing meaningful to return
+        without them. Non-critical steps (critical=False) log the failure,
+        record the step name in `failed_steps`, and return {} so the rest
+        of the pipeline can continue.
         """
         with self.tracer.start_as_current_span(f"{name}.run") as span:
             span.set_attribute("agent", name)
             span.set_attribute("input_args", str(kwargs))
+            span.set_attribute("critical", critical)
 
             try:
-                result = fn(**kwargs)
+                # agent_execution_seconds was defined in metrics.py but
+                # never actually recorded anywhere in this project --
+                # confirmed by grepping the whole codebase, not assumed.
+                # This is the one place that can fix that for every
+                # agent at once, since every agent call passes through here.
+                with agent_execution_seconds.labels(agent=name).time():
+                    result = fn(**kwargs)
+
                 if not isinstance(result, dict):
                     raise ValueError(f"{name} returned non-dict result")
 
@@ -104,12 +128,29 @@ class DynamicOrchestrator:
                     f"{name} failed",
                     extra={
                         "agent": name,
+                        "critical": critical,
                         "error": str(exc),
                         "trace_id": _get_trace_id(),
                         "stack": traceback.format_exc(),
                     },
                 )
-                raise
+                span.set_attribute("failed", True)
+                agent_errors_total.labels(agent=name).inc()
+
+                # ValueError is the convention this codebase uses
+                # throughout for input validation failures -- distinct
+                # from a genuine dependency/infrastructure failure, and
+                # now visible as its own thing instead of folded into the
+                # same generic error count as everything else.
+                if isinstance(exc, ValueError):
+                    agent_validation_failures_total.labels(agent=name).inc()
+
+                if critical:
+                    raise
+
+                if failed_steps is not None:
+                    failed_steps.append(name)
+                return {}
 
     def run(self, product_id: str, query: str, top_k: int = 3) -> dict:
         ANALYSIS_REQUESTS_TOTAL.labels(endpoint="/analyze").inc()
@@ -169,6 +210,7 @@ class DynamicOrchestrator:
                             "query": query,
                             "memory": memory,
                         }
+                        failed_steps: list[str] = []
 
                         # -------------------------
                         # Execute agents based on plan
@@ -178,6 +220,8 @@ class DynamicOrchestrator:
                             competitive = self._safe_agent_call(
                                 "competitive_agent",
                                 self.competitive_agent.run,
+                                critical=False,
+                                failed_steps=failed_steps,
                                 product_id=product_id,
                                 top_k=5,
                             )
@@ -202,6 +246,8 @@ class DynamicOrchestrator:
                             buy_decision = self._safe_agent_call(
                                 "buy_decision_agent",
                                 self.buy_decision_agent.run,
+                                critical=False,
+                                failed_steps=failed_steps,
                                 analysis_result=analysis,
                             )
                             analysis["buy_decision"] = buy_decision.get("buy_decision")
@@ -211,6 +257,8 @@ class DynamicOrchestrator:
                             topics = self._safe_agent_call(
                                 "topic_agent",
                                 self.topic_agent.run,
+                                critical=False,
+                                failed_steps=failed_steps,
                                 top_k=5,
                             )
                             analysis["top_themes"] = topics.get("top_themes")
@@ -220,6 +268,8 @@ class DynamicOrchestrator:
                             trends = self._safe_agent_call(
                                 "trend_agent",
                                 self.trend_agent.run,
+                                critical=False,
+                                failed_steps=failed_steps,
                             )
                             analysis["trend_analysis"] = trends.get("trend_analysis")
 
@@ -228,6 +278,8 @@ class DynamicOrchestrator:
                             aspect_sentiment = self._safe_agent_call(
                                 "aspect_sentiment_agent",
                                 self.aspect_sentiment_agent.run,
+                                critical=False,
+                                failed_steps=failed_steps,
                                 product_id=product_id,
                                 top_k=2,
                             )
@@ -238,34 +290,54 @@ class DynamicOrchestrator:
                             sentiment = self._safe_agent_call(
                                 "sentiment_agent",
                                 self.sentiment_agent.run,
+                                critical=False,
+                                failed_steps=failed_steps,
                                 product_id=product_id,
                             )
                             analysis["sentiment"] = sentiment
                         # 8. Forecasting
                         if plan.get("use_forecast"):
-                            forecast = self._safe_agent_call(
-                                "forecast_agent",
-                                self.forecast_agent.run,
-                                product_data=product_data,
-                            )
-                            analysis["predicted_class"] = forecast.get("predicted_class")
+                            if not product_data:
+                                logger.warning(
+                                    "Skipping forecast_agent: forecasting requires product data.",
+                                    extra={"agent": "forecast_agent", "trace_id": trace_id},
+                                )
+                                failed_steps.append("forecast_agent")
+                            else:
+                                forecast = self._safe_agent_call(
+                                    "forecast_agent",
+                                    self.forecast_agent.run,
+                                    critical=False,
+                                    failed_steps=failed_steps,
+                                    product_data=product_data,
+                                )
+                                analysis["predicted_class"] = forecast.get("predicted_class")
 
                         # 9. Counterfactuals
                         if plan.get("use_counterfactuals"):
                             if not product_data:
-                                raise ValueError("Counterfactual analysis requires product data.")
-                            counterfactuals = self._safe_agent_call(
-                                "counterfactual_agent",
-                                self.counterfactual_agent.run,
-                                product_data=product_data,
-                            )
-                            analysis["counterfactuals"] = counterfactuals.get("counterfactuals")
+                                logger.warning(
+                                    "Skipping counterfactual_agent: counterfactual analysis requires product data.",
+                                    extra={"agent": "counterfactual_agent", "trace_id": trace_id},
+                                )
+                                failed_steps.append("counterfactual_agent")
+                            else:
+                                counterfactuals = self._safe_agent_call(
+                                    "counterfactual_agent",
+                                    self.counterfactual_agent.run,
+                                    critical=False,
+                                    failed_steps=failed_steps,
+                                    product_data=product_data,
+                                )
+                                analysis["counterfactuals"] = counterfactuals.get("counterfactuals")
 
                         # 10. Retrieval (RAG)
                         if plan.get("use_retrieval"):
                             retrieval = self._safe_agent_call(
                                 "retrieval_agent",
                                 self.retrieval_agent.run,
+                                critical=False,
+                                failed_steps=failed_steps,
                                 product_id=product_id,
                                 query=query,
                                 top_k=top_k,
@@ -276,6 +348,8 @@ class DynamicOrchestrator:
                             recs = self._safe_agent_call(
                                 "recommender_agent",
                                 self.recommender_agent.run,
+                                critical=False,
+                                failed_steps=failed_steps,
                                 product_id=product_id,
                                 top_k=3,
                             )
@@ -286,6 +360,8 @@ class DynamicOrchestrator:
                             images = self._safe_agent_call(
                                 "image_retrieval_agent",
                                 self.image_retrieval_agent.run,
+                                critical=False,
+                                failed_steps=failed_steps,
                                 product_id=product_id,
                                 top_k=3,
                             )
@@ -296,6 +372,8 @@ class DynamicOrchestrator:
                             summaries = self._safe_agent_call(
                                 "summarization_agent",
                                 self.summarization_agent.run,
+                                critical=False,
+                                failed_steps=failed_steps,
                                 product_id=product_id,
                                 top_k=2,
                             )
@@ -307,15 +385,20 @@ class DynamicOrchestrator:
                                 report = self._safe_agent_call(
                                     "report_agent",
                                     self.report_agent.run,
+                                    critical=False,
+                                    failed_steps=failed_steps,
                                     analysis_result=analysis,
                                 )
-                                analysis["report"] = report.get("report")
+                                if report.get("report"):
+                                    analysis["report"] = report["report"]
 
                         # 15. Guardrail
                         if plan.get("use_guardrail") and "predicted_class" in analysis and "report" in analysis:
                             guardrail = self._safe_agent_call(
                                 "guardrail_agent",
                                 self.guardrail_agent.run,
+                                critical=False,
+                                failed_steps=failed_steps,
                                 predicted_class=analysis["predicted_class"],
                                 report=analysis["report"],
                             )
@@ -325,12 +408,26 @@ class DynamicOrchestrator:
                             critic = self._safe_agent_call(
                                 "critic_agent",
                                 self.critic_agent.run,
+                                critical=False,
+                                failed_steps=failed_steps,
                                 analysis_result=analysis,
                                 report=analysis["report"],
                             )
                             analysis["critic_report"] = critic.get("critic_report")
-                       
-                    
+                            analysis["critic_scores"] = critic.get("critic_scores")
+
+                            # Live signal, not the offline FaithfulnessJudge
+                            # check -- zero extra cost, reuses the score
+                            # critic_agent already computed. Only observed
+                            # when the score actually parsed; a None here
+                            # means the LLM didn't follow critic_agent's
+                            # requested format, not that hallucination is 0.
+                            if analysis["critic_scores"]:
+                                rate = hallucination_rate_from_critic_scores(analysis["critic_scores"])
+                                if rate is not None:
+                                    critic_hallucination_rate.observe(rate)
+
+                        analysis["failed_steps"] = failed_steps
 
                         # -------------------------
                         # Save memory
@@ -348,12 +445,17 @@ class DynamicOrchestrator:
                         # -------------------------
                         # Cache write
                         # -------------------------
-                        self.cache_service.set_json(
-                            "analysis:full",
-                            cache_payload,
-                            final,
-                            ttl_seconds=3600,
-                        )
+                        # Don't cache a degraded result -- a step that failed
+                        # transiently (rate limit, timeout) shouldn't get
+                        # served back to every identical request for the next
+                        # hour just because it failed once.
+                        if not failed_steps:
+                            self.cache_service.set_json(
+                                "analysis:full",
+                                cache_payload,
+                                final,
+                                ttl_seconds=3600,
+                            )
 
                         logger.info(
                             "Analysis completed",

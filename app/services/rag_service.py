@@ -42,7 +42,19 @@ class RAGService:
             span.set_attribute("top_k", top_k)
 
             # --- Cache lookup ---
-            cached = self.cache.get_json("rag:evidence", cache_payload)
+            # A cache-layer problem shouldn't cost real evidence if Qdrant
+            # itself is healthy -- degrade to a cache miss and still
+            # attempt real retrieval, rather than failing the whole call
+            # over what's supposed to be a pure optimization.
+            try:
+                cached = self.cache.get_json("rag:evidence", cache_payload)
+            except Exception:
+                logger.error(
+                    f"Cache read failed for product_id={product_id}, treating as a cache miss",
+                    exc_info=True,
+                )
+                cached = None
+
             if cached is not None:
                 logger.debug(f"Cache hit for product_id={product_id}, query='{query}'")
                 span.set_attribute("cache_hit", True)
@@ -52,6 +64,16 @@ class RAGService:
             span.set_attribute("cache_hit", False)
 
             # --- Retrieval ---
+            # This used to catch a retrieval failure and return [] --
+            # which makes "Qdrant is down" indistinguishable from "this
+            # product genuinely has no matching evidence" to every
+            # downstream consumer (report generation, buy decisions,
+            # aspect summaries all read evidence without knowing which
+            # case they're in). Confirmed: with Qdrant fully unreachable,
+            # this returned exactly the same [] a real zero-match query
+            # would. Letting it propagate means retrieval_agent
+            # (non-critical) correctly shows up in failed_steps instead of
+            # looking like a successful, evidence-free retrieval.
             try:
                 results = self.retriever.search(
                     query=query,
@@ -64,7 +86,7 @@ class RAGService:
                     exc_info=True,
                 )
                 span.set_attribute("retrieval_error", True)
-                return []
+                raise
 
             span.set_attribute("retrieval_error", False)
             span.set_attribute("retrieved_count", len(results))

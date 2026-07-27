@@ -1,11 +1,59 @@
 from __future__ import annotations
 
+import math
+import re
+
 from app.agents.base_agent import BaseAgent
 from app.models.llm.llm_client import LLMClient
 from app.logging.logger import get_logger
 from app.observability.agent_tracing import traced_agent
 
 logger = get_logger("agents.critic")
+
+# Matches lines like "Explanation Quality: 7/10" from the prompt's requested
+# output format. Scores end up here as actual numbers instead of staying
+# buried in a text blob nothing ever reads programmatically -- there's a
+# full Grafana/Prometheus stack in this project and none of this was ever
+# reaching it.
+_SCORE_PATTERN = re.compile(
+    r"^\s*(Explanation Quality|Hallucination Risk|Retrieval Relevance|"
+    r"Recommendation Quality|Overall Score)\s*:\s*(-?\d+(?:\.\d+)?)\s*/\s*10",
+    re.IGNORECASE | re.MULTILINE,
+)
+_CRITIQUE_PATTERN = re.compile(r"^\s*Critique\s*:\s*(.+)", re.IGNORECASE | re.DOTALL | re.MULTILINE)
+
+_SCORE_KEYS = {
+    "explanation quality": "explanation_quality",
+    "hallucination risk": "hallucination_risk",
+    "retrieval relevance": "retrieval_relevance",
+    "recommendation quality": "recommendation_quality",
+    "overall score": "overall_score",
+}
+
+
+def _parse_critique(text: str) -> dict:
+    """Best-effort parse of the critic's expected output format into
+    actual numbers. Returns None for any field the LLM didn't produce in
+    the expected shape, rather than guessing -- a missing score should
+    read as missing, not as a fabricated default that looks real.
+    """
+    scores: dict[str, float | None] = {v: None for v in _SCORE_KEYS.values()}
+
+    for match in _SCORE_PATTERN.finditer(text):
+        label = match.group(1).strip().lower()
+        key = _SCORE_KEYS.get(label)
+        if key is None:
+            continue
+        try:
+            scores[key] = float(match.group(2))
+        except ValueError:
+            pass
+
+    critique_match = _CRITIQUE_PATTERN.search(text)
+    scores["critique_text"] = critique_match.group(1).strip() if critique_match else None
+
+    return scores
+
 
 class CriticAgent(BaseAgent):
     def __init__(self) -> None:
@@ -14,9 +62,15 @@ class CriticAgent(BaseAgent):
 
     def _safe_float(self, value):
         try:
-            return float(value)
+            result = float(value)
         except Exception:
             return 0.0
+        # float(nan) succeeds -- it doesn't raise -- so the try/except
+        # above never actually catches a NaN input on its own. Confirmed:
+        # _safe_float(float("nan")) returned nan, not 0.0, and formatting
+        # it doesn't crash either, it just puts the literal text "nan"
+        # into the prompt where a real number belongs.
+        return 0.0 if math.isnan(result) else result
 
     def _build_prompt(self, analysis_result: dict, report: str) -> str:
         predicted_class = analysis_result.get("predicted_class", "")
@@ -56,6 +110,13 @@ Predicted Class: {rec.get("predicted_class", "")}
             for aspect, payload in aspect_summaries.items()
         ]
 
+        sentiment_text = (
+            f"Average sentiment score: {self._safe_float(sentiment.get('avg_sentiment_score', 0.0)):.3f}\n"
+            f"Positive reviews: {self._safe_float(sentiment.get('positive_review_ratio', 0.0)):.2%}\n"
+            f"Neutral reviews: {self._safe_float(sentiment.get('neutral_review_ratio', 0.0)):.2%}\n"
+            f"Negative reviews: {self._safe_float(sentiment.get('negative_review_ratio', 0.0)):.2%}"
+        )
+
         prompt = f"""
 You are a critic agent in a multi-agent e-commerce intelligence system.
 
@@ -82,7 +143,7 @@ Product:
 - Predicted class: {predicted_class}
 
 Sentiment:
-{sentiment}
+{sentiment_text}
 
 Aspect summaries:
 {"; ".join(aspect_text)}
@@ -114,11 +175,10 @@ Critique: <short critique>
         if not isinstance(report, str):
             raise ValueError("CriticAgent: report must be a string")
 
-        try:
-            prompt = self._build_prompt(analysis_result, report)
-            critique = self.llm.generate_text(prompt)
-        except Exception:
-            logger.error(f"{self.name}: critique generation failed", exc_info=True)
-            raise
+        prompt = self._build_prompt(analysis_result, report)
+        critique = self.llm.generate_text(prompt)
 
-        return {"critic_report": critique}
+        return {
+            "critic_report": critique,
+            "critic_scores": _parse_critique(critique),
+        }

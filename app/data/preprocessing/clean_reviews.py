@@ -5,6 +5,7 @@ from pathlib import Path
 import pandas as pd
 
 from app.data.loaders.reviews_loader import ReviewsLoader
+from app.utils.time_utils import parse_review_datetime
 
 
 class ReviewCleaner:
@@ -40,18 +41,7 @@ class ReviewCleaner:
         # Convert timestamp if present
         if "review_timestamp" in df.columns:
             df["review_timestamp"] = pd.to_numeric(df["review_timestamp"], errors="coerce")
-            df["review_datetime"] = pd.to_datetime(
-                df["review_timestamp"], unit="ms", errors="coerce"
-            )
-
-            # fallback if timestamps are in seconds
-            missing_dt = df["review_datetime"].isna()
-            if missing_dt.any():
-                df.loc[missing_dt, "review_datetime"] = pd.to_datetime(
-                    df.loc[missing_dt, "review_timestamp"],
-                    unit="s",
-                    errors="coerce",
-                )
+            df["review_datetime"] = parse_review_datetime(df["review_timestamp"])
 
         # Remove duplicates
         dedupe_cols = [c for c in ["user_id", "product_id", "review_text", "rating"] if c in df.columns]

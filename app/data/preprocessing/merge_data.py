@@ -4,6 +4,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from app.config.paths import REVIEWS_PATH, CLEAN_METADATA_PATH, MERGED_DATA_PATH
+
 
 class DataMerger:
     def __init__(self, reviews_df: pd.DataFrame, metadata_df: pd.DataFrame) -> None:
@@ -25,9 +27,9 @@ class DataMerger:
 
 
 def save_merged_data(
-    reviews_path: str = "data/interim/reviews_electronics_clean.csv",
-    metadata_path: str = "data/interim/meta_electronics_clean.csv",
-    output_path: str = "data/processed/electronics_merged.csv",
+    reviews_path: str = REVIEWS_PATH,
+    metadata_path: str = CLEAN_METADATA_PATH,
+    output_path: str = MERGED_DATA_PATH,
 ) -> pd.DataFrame:
     reviews_df = pd.read_csv(reviews_path)
     metadata_df = pd.read_csv(metadata_path)

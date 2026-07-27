@@ -75,3 +75,22 @@ PRODUCT_MEMORY_PATH= env_path(
     "PRODUCT_MEMORY_PATH",
     "artifacts/memory/product_memory.db"
 )
+EVAL_HISTORY_DB_PATH = env_path(
+    "EVAL_HISTORY_DB_PATH",
+    "artifacts/eval_history/eval_runs.db"
+)
+
+# Deliberately NOT reusing METADATA_PATH above -- that constant already
+# means something different (the orphaned FAISS text-retriever's embedding
+# metadata, per app/rag/retriever.py and qdrant_index_builder.py), not
+# product metadata. Value here matches what clean_metadata.py's
+# save_clean_metadata() actually hardcodes as its output path.
+CLEAN_METADATA_PATH = env_path(
+    "CLEAN_METADATA_PATH",
+    "data/interim/meta_electronics_clean.csv"
+)
+
+MERGED_DATA_PATH = env_path(
+    "MERGED_DATA_PATH",
+    "data/processed/electronics_merged.csv"
+)

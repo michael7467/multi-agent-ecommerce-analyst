@@ -1,3 +1,4 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
 -r requirements-base.txt
 pydantic-settings
 faiss-cpu
@@ -8,5 +9,6 @@ sentence-transformers
 bertopic
 umap-learn
 hdbscan
+nltk
 altair
 python-json-logger

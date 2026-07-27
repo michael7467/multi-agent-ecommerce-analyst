@@ -1,11 +1,10 @@
 from __future__ import annotations
 
+import math
+
 from app.agents.base_agent import BaseAgent
 from app.models.forecasting.predict import PricePredictor
-from app.logging.logger import get_logger
 from app.observability.agent_tracing import traced_agent
-
-logger = get_logger("agents.forecast")
 
 class ForecastAgent(BaseAgent):
     def __init__(self) -> None:
@@ -23,25 +22,34 @@ class ForecastAgent(BaseAgent):
             "review_time_span"
         ]
 
+        model_input = {}
         for key in required:
             if key not in product_data:
                 raise ValueError(f"ForecastAgent: missing required field '{key}'")
 
-        model_input = {
-            "review_count": float(product_data["review_count"]),
-            "avg_rating": float(product_data["avg_rating"]),
-            "rating_std": float(product_data["rating_std"]),
-            "verified_purchase_ratio": float(product_data["verified_purchase_ratio"]),
-            "avg_review_length": float(product_data["avg_review_length"]),
-            "review_time_span": float(product_data["review_time_span"]),
-            "title": product_data.get("title", ""),
-            "categories": product_data.get("categories", ""),
-        }
+            raw_value = product_data[key]
+            try:
+                value = float(raw_value)
+            except (TypeError, ValueError):
+                raise ValueError(
+                    f"ForecastAgent: field '{key}' is not numeric (got {raw_value!r})"
+                )
 
-        try:
-            prediction = self.predictor.predict(model_input)
-        except Exception:
-            logger.error(f"{self.name}: forecast failed", exc_info=True)
-            raise
+            if math.isnan(value):
+                # Field presence alone doesn't catch this: a NaN feature
+                # value (e.g. from DataAgent's source CSV having a genuine
+                # gap for this product) still passes "key in product_data",
+                # since the key IS there, just with a NaN value. float(nan)
+                # doesn't raise either, so this would otherwise reach the
+                # model as a silent NaN input with unknown behavior --
+                # nothing in PricePredictor.predict() imputes or rejects it
+                # explicitly.
+                raise ValueError(f"ForecastAgent: field '{key}' is NaN")
 
+            model_input[key] = value
+
+        model_input["title"] = product_data.get("title", "")
+        model_input["categories"] = product_data.get("categories", "")
+
+        prediction = self.predictor.predict(model_input)
         return {"predicted_class": prediction["predicted_class"]}

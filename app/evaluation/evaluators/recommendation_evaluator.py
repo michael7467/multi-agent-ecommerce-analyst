@@ -4,12 +4,12 @@ import json
 from pathlib import Path
 
 
-from app.agents.dynamic_orchestrator import DynamicOrchestrator
+from app.agents.langgraph_orchestrator import LangGraphOrchestrator
 
 
 class RecommendationEvaluator:
     def __init__(self) -> None:
-        self.orchestrator = DynamicOrchestrator()
+        self.orchestrator = LangGraphOrchestrator()
 
     @staticmethod
     def simple_recommendation_rule(final_output: dict) -> str:

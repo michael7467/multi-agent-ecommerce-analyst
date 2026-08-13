@@ -9,7 +9,7 @@ from __future__ import annotations
 # indexed directly without .get() -- the legacy orchestrator always
 # populates every field, so direct indexing never failed there.
 # DynamicOrchestrator's fields are conditional on the plan.
-from app.agents.dynamic_orchestrator import DynamicOrchestrator
+from app.agents.langgraph_orchestrator import LangGraphOrchestrator
 
 
 def evaluate_orchestrator(
@@ -27,7 +27,7 @@ def evaluate_orchestrator(
     """
     try:
         if precomputed_result is None:
-            orchestrator = DynamicOrchestrator()
+            orchestrator = LangGraphOrchestrator()
             precomputed_result = orchestrator.run(
                 product_id=product_id,
                 query=query,

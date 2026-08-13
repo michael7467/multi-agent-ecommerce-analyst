@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-# Verified directly against app/agents/planning_agent.py's _RULES and
-# app/agents/dynamic_orchestrator.py's analysis-dict construction -- not
-# inferred from flag names.
+
 ALL_FLAGS = [
     "use_competitive", "use_data", "use_buy_decision", "use_topics", "use_trends",
     "use_aspect_sentiment", "use_sentiment", "use_forecast", "use_counterfactuals",
@@ -29,11 +27,7 @@ FLAG_TO_OUTPUT_FIELDS: dict[str, list[str]] = {
     "use_critic": ["critic_report", "critic_scores"],
 }
 
-# use_guardrail and use_critic only produce output if predicted_class/report
-# also exist in dynamic_orchestrator.py (confirmed: their gating conditions
-# check those keys explicitly, not just their own flag). A missing field
-# for either can be a correct cascading consequence of an earlier step
-# being skipped or failing -- not necessarily this flag's own failure.
+
 CASCADING_FLAGS = {"use_guardrail", "use_critic"}
 
 

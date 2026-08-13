@@ -138,18 +138,8 @@ class ReportService:
             predicted_class = analysis_result.get("predicted_class", None)
             span.set_attribute("predicted_class", str(predicted_class))
 
-            # Both of the try/excepts below used to catch their failure and
-            # return a placeholder string instead of raising. That string
-            # is non-empty, so it's truthy -- which meant a genuine LLM
-            # failure or a malformed analysis_result would sail straight
-            # past dynamic_orchestrator.py's `if report.get("report"):`
-            # guard (added a few turns ago specifically to stop a *failed*
-            # report from being treated as a real one) and get set as
-            # analysis["report"] anyway, then persisted to memory/history
-            # as if it were a genuine report. Non-critical failures are
-            # supposed to show up in failed_steps -- a placeholder that
-            # looks like success does the opposite of that. Letting these
-            # propagate is what makes that guard actually work.
+
+       
             prompt = self._build_prompt(analysis_result)
 
             logger.debug(f"Report prompt length: {len(prompt)} characters")
@@ -186,9 +176,9 @@ class ReportService:
 
 
 if __name__ == "__main__":
-    from app.agents.dynamic_orchestrator import DynamicOrchestrator
+    from app.agents.langgraph_orchestrator import LangGraphOrchestrator
 
-    orchestrator = DynamicOrchestrator()
+    orchestrator = LangGraphOrchestrator()
 
     result = orchestrator.run(
         product_id="B09SPZPDJK",

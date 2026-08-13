@@ -138,8 +138,7 @@ class LangGraphOrchestrator:
         self.competitive_agent = CompetitiveAgent()
         self.buy_decision_agent = BuyDecisionAgent()
         self.trend_agent = TrendAgent()
-        # backend="zero_shot" matches dynamic_orchestrator's construction
-        # exactly -- not the default-args version.
+
         self.aspect_sentiment_agent = AspectSentimentAgent(backend="zero_shot")
         self.counterfactual_agent = CounterfactualAgent()
         self.retrieval_agent = RetrievalAgent()
@@ -214,8 +213,7 @@ class LangGraphOrchestrator:
         return {"trend_analysis": result.get("trend_analysis")}
 
     def _aspect_sentiment_node(self, state: AnalysisState) -> dict:
-        # top_k=2 matches dynamic_orchestrator's actual call exactly --
-        # not the agent's own default of 3.
+  
         result = _safe_agent_node(
             "aspect_sentiment_agent", self.aspect_sentiment_agent.run,
             critical=False, product_id=state["product_id"], top_k=2,
@@ -234,8 +232,7 @@ class LangGraphOrchestrator:
         return {"evidence": result.get("evidence")}
 
     def _recommender_node(self, state: AnalysisState) -> dict:
-        # top_k=3 matches dynamic_orchestrator exactly -- not the agent's
-        # own default of 5.
+    
         result = _safe_agent_node(
             "recommender_agent", self.recommender_agent.run,
             critical=False, product_id=state["product_id"], top_k=3,
@@ -245,8 +242,7 @@ class LangGraphOrchestrator:
         return {"recommendations": result.get("recommendations")}
 
     def _image_retrieval_node(self, state: AnalysisState) -> dict:
-        # top_k=3 matches dynamic_orchestrator exactly -- not the agent's
-        # own default of 5.
+ 
         result = _safe_agent_node(
             "image_retrieval_agent", self.image_retrieval_agent.run,
             critical=False, product_id=state["product_id"], top_k=3,
@@ -256,8 +252,7 @@ class LangGraphOrchestrator:
         return {"image_similar_products": result.get("image_similar_products")}
 
     def _summarization_node(self, state: AnalysisState) -> dict:
-        # top_k=2 matches dynamic_orchestrator exactly -- not the agent's
-        # own default of 3.
+    
         result = _safe_agent_node(
             "summarization_agent", self.summarization_agent.run,
             critical=False, product_id=state["product_id"], top_k=2,
@@ -270,11 +265,7 @@ class LangGraphOrchestrator:
     # Nodes -- data-dependent group (3 total: sequenced after data_agent)
     # -------------------------
     def _forecast_node(self, state: AnalysisState) -> dict:
-        # forecast_agent and counterfactual_agent both self-skip when
-        # product_data is empty, exactly matching dynamic_orchestrator's
-        # explicit guard. buy_decision_agent has no such guard in the
-        # original (see _buy_decision_node) -- that asymmetry is
-        # preserved here deliberately, not standardized away.
+  
         product_data = state.get("product_data")
         if not product_data:
             logger.warning(
@@ -307,14 +298,7 @@ class LangGraphOrchestrator:
         return {"counterfactuals": result.get("counterfactuals")}
 
     def _buy_decision_node(self, state: AnalysisState) -> dict:
-        # No product_data guard here -- matches dynamic_orchestrator's
-        # actual behavior exactly. buy_decision_service reads every field
-        # via .get(key, default), so it never crashes on missing data; it
-        # runs unconditionally whenever use_buy_decision is set, with
-        # title/price populated if data_agent succeeded and defaulted
-        # otherwise. Sequenced after data_agent purely so it sees
-        # title/price when they're available, not because it would break
-        # without them.
+     
         analysis_result = {
             k: v for k, v in state.items() if k not in ("plan", "failed_steps")
         }
@@ -347,12 +331,7 @@ class LangGraphOrchestrator:
     # note in run() about why routing to END directly was avoided)
     # -------------------------
     def _guardrail_node(self, state: AnalysisState) -> dict:
-        # Matches dynamic_orchestrator's exact combined gate: use_guardrail
-        # AND predicted_class present AND report present, all three. The
-        # original silently skips (no warning, no failed_steps entry) when
-        # this fails -- unlike forecast/counterfactual's explicit
-        # log-and-record skip. Preserved here exactly, not standardized
-        # to match the other pattern.
+ 
         plan = state.get("plan", {})
         if not plan.get("use_guardrail") or "predicted_class" not in state or "report" not in state:
             return {}
@@ -448,13 +427,7 @@ class LangGraphOrchestrator:
         if plan.get("use_data"):
             targets.append("data_agent")
         else:
-            # data_agent itself wasn't requested. The three agents that
-            # would normally be sequenced after it need to be routed to
-            # directly instead, so they still run at all -- forecast and
-            # counterfactual self-skip via their own product_data guard;
-            # buy_decision has no such guard and always runs, with
-            # title/price simply absent, exactly matching
-            # dynamic_orchestrator's behavior when data wasn't requested.
+       
             if plan.get("use_forecast"):
                 targets.append("forecast_agent")
             if plan.get("use_counterfactuals"):
@@ -572,15 +545,7 @@ class LangGraphOrchestrator:
                             {"product_id": product_id, "query": query, "top_k": top_k, "failed_steps": []}
                         )
 
-                        # -------------------------
-                        # Save memory
-                        # -------------------------
-                        # result already carries product_id/query/memory/plan
-                        # plus every field agents wrote -- an extra "plan" key
-                        # beyond what dynamic_orchestrator's analysis dict ever
-                        # had, but save_product_memory reads everything via
-                        # .get(), confirmed by checking its implementation
-                        # directly, so the extra key is harmless.
+                    
                         if "report" in result:
                             self.memory_agent.save_product_memory(result)
                             self.memory_agent.save_history(
@@ -589,14 +554,7 @@ class LangGraphOrchestrator:
 
                         final = {"plan": result.get("plan"), "final_output": result}
 
-                        # -------------------------
-                        # Cache write
-                        # -------------------------
-                        # Don't cache a degraded result -- a step that failed
-                        # transiently (rate limit, timeout) shouldn't get
-                        # served back to every identical request for the next
-                        # hour just because it failed once. Matches
-                        # dynamic_orchestrator's exact rule.
+                     
                         if not result.get("failed_steps"):
                             self.cache_service.set_json(
                                 "analysis:full", cache_payload, final, ttl_seconds=3600,

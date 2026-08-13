@@ -1,8 +1,8 @@
-from app.agents.dynamic_orchestrator import DynamicOrchestrator
+from app.agents.langgraph_orchestrator import LangGraphOrchestrator
 
 
 def test_orchestrator_returns_plan_and_output(monkeypatch):
-    orchestrator = DynamicOrchestrator()
+    orchestrator = LangGraphOrchestrator()
 
     monkeypatch.setattr(
         orchestrator.memory_agent,

@@ -21,18 +21,7 @@ logger = get_logger("evaluation.retrieval")
 
 class RetrievalEvaluator:
     def __init__(self, pool_size: int = 200, relevance_judge=None) -> None:
-        """pool_size: how many results to fetch per case to approximate
-        "every relevant item that exists" for recall/nDCG's denominator.
-        Needs to comfortably exceed any single product's review count --
-        200 is a starting guess, not a measured value; raise it if a
-        product in your eval set has more reviews than that.
-
-        relevance_judge: anything exposing is_relevant(query, review_text,
-        relevant_keywords) -> bool. Defaults to KeywordRelevanceJudge (free,
-        instant, approximate). Pass LLMRelevanceJudge(...) instead for
-        cached LLM-as-judge relevance -- same interface, no other code here
-        needs to change.
-        """
+  
         self.rag_service = RAGService()
         self.pool_size = pool_size
         self.relevance_judge = relevance_judge or KeywordRelevanceJudge()
@@ -46,9 +35,7 @@ class RetrievalEvaluator:
     ) -> dict:
         base = {"product_id": product_id, "query": query, "top_k": top_k}
 
-        # One fetch, sized to double as both "the top_k being evaluated"
-        # and "the full candidate pool" recall/nDCG need as a denominator
-        # -- avoids a second round-trip per case.
+       
         try:
             pool = self.rag_service.get_product_evidence(
                 product_id=product_id,
@@ -56,11 +43,6 @@ class RetrievalEvaluator:
                 top_k=max(top_k, self.pool_size),
             )
         except Exception:
-            # Distinguishable from a genuine zero-match case since the
-            # RAGService fix a few turns ago -- before that, this and "no
-            # matches" were indistinguishable, which would have made
-            # failed_retrieval_rate meaningless (a real outage and a
-            # legitimately empty result would have looked identical).
             logger.error(
                 f"Retrieval failed for eval case product_id={product_id}, query={query!r}",
                 exc_info=True,
@@ -115,9 +97,6 @@ class RetrievalEvaluator:
         ok = [r for r in results if not r["failed"]]
 
         def avg(key: str) -> float | None:
-            # recall_at_k can be None (undefined, not zero) when a case
-            # has no relevant items at all -- skip those rather than
-            # letting them silently drag the average toward 0.
             values = [r[key] for r in ok if r[key] is not None]
             return sum(values) / len(values) if values else None
 

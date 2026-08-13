@@ -1,20 +1,19 @@
 # 🧠 Multi-Agent E-Commerce Analyst
 
-AI-powered product intelligence platform with multi-agent orchestration, RAG, sentiment analysis, topic modeling, and real-time insights.
+AI-powered product intelligence platform: 18-agent orchestration, hybrid RAG, aspect-level sentiment, price forecasting, and automated evaluation gates.
 
-A production-ready system that analyzes e-commerce products using LLM-driven agents, retrieves evidence from reviews, generates insights, and produces a final decision report.
+A production system that analyzes e-commerce products using LLM-driven agents, retrieves grounded evidence from ~50K reviews, and produces a structured, fact-checked decision report.
 
 ---
 
 ## 🚀 Overview
 
-This platform combines modern AI techniques with scalable backend architecture to deliver deep product intelligence:
-
-- 🔍 Extract insights from product reviews
-- 💬 Perform sentiment & aspect-level analysis
-- 🧠 Use Retrieval-Augmented Generation (RAG) for grounded answers
-- 📊 Generate structured decision reports
-- ⚙️ Operate through a coordinated multi-agent pipeline
+- 🔍 Hybrid retrieval (dense + BM25 + reranking) over review embeddings
+- 💬 Global, aspect-level, and time-trend sentiment analysis
+- 🧠 Price-tier forecasting and buy-now/wait recommendations
+- 📊 Structured reports, independently fact-checked by a critic agent
+- ⚙️ 18 agents, fanned out in parallel where no dependency exists
+- 🧪 Automated retrieval/generation/routing evaluation, gating CI on regression
 
 ---
 
@@ -22,22 +21,29 @@ This platform combines modern AI techniques with scalable backend architecture t
 
 ### 🔹 Multi-Agent Architecture
 
-A coordinated system of specialized agents:
-
 | Agent | Responsibility |
 |-------|----------------|
-| PlanningAgent | Builds execution plan |
-| DataAgent | Fetches product data & reviews |
-| SentimentAgent | Global + aspect sentiment analysis |
-| TopicAgent | Extracts themes & pain points |
-| RetrievalAgent | RAG over review embeddings |
-| ImageRetrievalAgent | Multimodal similarity |
+| MemoryAgent | Recalls prior history for this product |
+| PlanningAgent | LLM decides which agents this query needs |
+| DataAgent | Fetches price, category, features |
+| SentimentAgent | Overall review sentiment |
+| AspectSentimentAgent | Sentiment per feature (battery, sound, comfort...) |
+| TopicAgent | Extracts themes and pain points |
+| RetrievalAgent | Hybrid RAG over review embeddings |
+| ImageRetrievalAgent | Visual similarity matching |
+| RecommenderAgent | Related/alternative products |
+| SummarizationAgent | Condenses evidence into a summary |
+| ForecastAgent | Predicts price tier |
+| CompetitiveAgent | Compares against competitor products |
+| TrendAgent | Time-based sentiment patterns |
 | CounterfactualAgent | Suggests product improvements |
-| ReportAgent | Generates final structured report |
-| GuardrailAgent | Safety & hallucination checks |
-| CriticAgent | Evaluates agent outputs |
+| BuyDecisionAgent | Buy-now vs. wait recommendation |
+| ReportAgent | Writes the final structured report |
+| GuardrailAgent | Checks predicted price tier matches report text |
+| PIIGuardrailAgent | Regex-redacts emails/phone numbers |
+| CriticAgent | Independently scores the report for hallucination |
 
-All agents are orchestrated in a fault-tolerant pipeline.
+Agents with no shared dependency run concurrently; a small data-dependent group (forecast, buy-decision, counterfactual) waits on `DataAgent`'s output first.
 
 ---
 
@@ -45,64 +51,74 @@ All agents are orchestrated in a fault-tolerant pipeline.
 
 ```mermaid
 flowchart TD
-    UI[Streamlit UI] --> API[FastAPI Multi-Agent System]
-    API --> Redis[Redis Cache]
-    API --> Qdrant[Qdrant Vector DB]
-    API --> OTEL[OpenTelemetry]
+    UI[Streamlit UI] --> Orch[LangGraph Orchestrator]
+    API[FastAPI] --> Orch
 
-    subgraph Agents
-        Planner[PlanningAgent]
-        Data[DataAgent]
-        Sentiment[SentimentAgent]
-        Topic[TopicAgent]
-        Retrieval[RetrievalAgent]
-        Image[ImageRetrievalAgent]
-        Counter[CounterfactualAgent]
-        Report[ReportAgent]
-        Guard[GuardrailAgent]
-        Critic[CriticAgent]
-    end
+    Orch --> Memory[MemoryAgent]
+    Memory --> Planner[PlanningAgent]
 
-    API --> Planner
-    Planner --> Data
-    Data --> Sentiment
-    Sentiment --> Topic
-    Topic --> Retrieval
-    Retrieval --> Image
-    Image --> Counter
-    Counter --> Report
-    Report --> Guard
-    Guard --> Critic
+    Planner --> Parallel{Parallel agents}
+    Parallel --> Sentiment[Sentiment / Aspect / Topic]
+    Parallel --> Retrieval[Retrieval / Image / Recommender]
+    Parallel --> Market[Competitive / Trend]
+    Parallel --> Data[DataAgent]
+
+    Data --> DataDep{Data-dependent}
+    Sentiment --> DataDep
+    Retrieval --> DataDep
+    Market --> DataDep
+    DataDep --> Forecast[Forecast / BuyDecision / Counterfactual]
+
+    Forecast --> Report[ReportAgent]
+    Report --> Checks{Parallel checks}
+    Checks --> Guard[Guardrail / PII / Critic]
 ```
+
+Streamlit and the API are separate entry points into the same orchestrator, not chained — Streamlit does not call the API over HTTP.
 
 ---
 
 ## 🛠️ Tech Stack
 
 ### 🔧 Backend
-- FastAPI
-- Python 3.12
-- Pydantic
-- Async orchestration
+- FastAPI, Python 3.12, Pydantic
+- LangGraph orchestration (parallel + conditional fan-out)
 - OpenTelemetry instrumentation
 
 ### 🎨 Frontend
-- Streamlit
-- Real-time analysis dashboard
+- Streamlit — real-time analysis dashboard, RBAC-gated admin views
 
 ### 🤖 AI / ML
-- LLM-based agents
-- RAG with Qdrant
-- Sentiment analysis (global + aspect)
-- Topic modeling
-- Counterfactual reasoning
+- LLM-based agents (OpenAI Responses API)
+- Hybrid RAG: dense + BM25 + cross-encoder reranking (Qdrant)
+- MLflow experiment tracking
+- Aspect sentiment: zero-shot classification or LLM backend
+- Model Context Protocol — exposed as a server, and as a client for external price lookups
 
 ### ☁️ Infrastructure
-- Docker
-- Kubernetes (Deployments, StatefulSets, Services, Ingress)
-- Redis (caching & messaging)
-- Qdrant (vector database)
-- GitHub Actions (CI/CD)
+- Docker (verified, live deployment)
+- Kubernetes manifests (see caveat below)
+- Redis (caching), Qdrant (vector DB)
+- GitHub Actions CI/CD, gated by the evaluation suite below
+
+---
+
+## 🧪 Evaluation & CI Gate
+
+Three evaluators run against curated eval sets and log every run to a persistent history:
+
+```bash
+python -m app.evaluation.evaluators.retrieval_evaluator
+python -m app.evaluation.evaluators.agentic_evaluator
+python -m app.evaluation.evaluators.generation_evaluator
+```
+
+Results are visible in Streamlit's eval dashboard, with trend lines across runs. CI blocks a deploy if a change regresses retrieval quality, routing accuracy, or hallucination rate.
+
+Standard unit tests:
+```bash
+pytest -q
+```
 
 ---
 
@@ -110,36 +126,25 @@ flowchart TD
 
 ```
 app/
+  ├── agents/            # 18 agent implementations + orchestrator
+  ├── services/           # aspect, RAG, buy-decision business logic
+  ├── rag/                  # Qdrant index build, retrieval, chunking
+  ├── prompts/                # system/user prompt templates, kept out of code
+  ├── models/                   # LLM client, embeddings, forecast model
+  ├── evaluation/                 # evaluators, metrics, eval history, CI runner
+  ├── memory/                       # per-product persistent history (SQLite)
+  ├── mcp/                            # MCP server
+  ├── config/                          # settings, paths
+  ├── observability/                    # tracing
   ├── api/
-  │   ├── main.py
-  │   ├── routers/
-  │   └── services/
-  ├── agents/
-  │   ├── planning_agent.py
-  │   ├── data_agent.py
-  │   ├── sentiment_agent.py
-  │   ├── topic_agent.py
-  │   ├── retrieval_agent.py
-  │   ├── report_agent.py
-  │   └── ...
-  ├── core/
-  ├── models/
-  ├── utils/
+  │   └── main.py
   └── ui/
-      └── streamlit_app.py
+      ├── streamlit_app.py
+      ├── auth.py                        # RBAC
+      └── eval_dashboard.py
 
-k8s/
-  ├── api-deployment.yaml
-  ├── api-service.yaml
-  ├── streamlit-deployment.yaml
-  ├── streamlit-service.yaml
-  ├── redis-deployment.yaml
-  ├── redis-service.yaml
-  ├── qdrant-statefulset.yaml
-  ├── qdrant-service.yaml
-  ├── ingress.yaml
-  ├── configmap.yaml
-  └── secret.yaml
+k8s/       # see caveat below
+tests/
 ```
 
 ---
@@ -147,108 +152,63 @@ k8s/
 ## 🐳 Running Locally (Docker Compose)
 
 ```bash
-docker-compose up --build
+docker compose up -d --build
 ```
 
 | Service | URL |
 |---------|-----|
 | API | http://localhost:8000 |
 | Streamlit UI | http://localhost:8501 |
+| Eval dashboard | http://localhost:8501/eval_dashboard |
+| Grafana | http://localhost:3001 |
 | Redis | localhost:6379 |
 | Qdrant | http://localhost:6333 |
 
 ---
 
-## ☸️ Kubernetes Deployment
+## ☸️ Kubernetes
 
-Apply all manifests:
+Manifests exist in `k8s/` but predate the LangGraph orchestrator, MCP, and RBAC additions — treat as a deployment target to update, not a verified current one.
 
 ```bash
 kubectl apply -f k8s/
 ```
 
-**Access:**
-- UI → https://ui.yourdomain.com
-- API → https://api.yourdomain.com
-
 ---
 
 ## 🔐 Environment Variables
 
-**ConfigMap (ecommerce-config)**
+**ConfigMap**
 
 | Variable | Description |
 |----------|-------------|
 | LOG_LEVEL | Logging verbosity |
 | REDIS_URL | Redis connection URL |
 | QDRANT_URL | Qdrant connection URL |
-| METRICS_PORT | Metrics endpoint port |
-| RATE_LIMIT_PER_MINUTE | API rate limit |
+| ADMIN_API_KEYS | RBAC admin access |
 | OTEL_* | OpenTelemetry config |
 
-**Secret (ecommerce-secrets)**
+**Secrets**
 
 | Variable | Description |
 |----------|-------------|
 | OPENAI_API_KEY | OpenAI API key |
 | QDRANT_API_KEY | Qdrant API key |
-| API_KEY | Internal API key |
 
 ---
 
 ## 📊 Observability
 
-The system includes:
-
-- OpenTelemetry tracing
-- Metrics endpoint
-- Health, readiness, and liveness probes
-- Distributed tracing across agents
-
-Compatible with:
-
-- Grafana
-- Tempo
-- Prometheus
-- Jaeger
-
----
-
-## 🧪 Testing
-
-```bash
-pytest -q
-```
-
----
-
-## 📈 Roadmap
-
-- [ ] Multi-product batch analysis
-- [ ] User authentication
-- [ ] Product comparison agent
-- [ ] Fine-tuned embedding model
-- [ ] GPU support for inference
+- OpenTelemetry tracing across all agents
+- Prometheus metrics + Grafana dashboards
+- Separate, periodic eval-history tracking (distinct from live traffic metrics)
 
 ---
 
 ## 🤝 Contributing
 
-Pull requests are welcome.
-Please open an issue first to discuss major changes.
-
----
+Pull requests welcome. Open an issue first for major changes.
 
 ## 📄 License
 
 MIT License.
-
----
-
-## 🙌 Acknowledgements
-
-- [Qdrant](https://qdrant.tech) — vector search
-- [Redis](https://redis.io) — caching & messaging
-- [Streamlit](https://streamlit.io) — UI
-- [FastAPI](https://fastapi.tiangolo.com) — backend API
-- [OpenTelemetry](https://opentelemetry.io) — observability

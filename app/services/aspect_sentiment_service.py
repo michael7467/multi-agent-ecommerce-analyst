@@ -9,6 +9,8 @@ from app.services.aspect_service import AspectService
 from app.config.settings import settings
 from app.logging.logger import get_logger
 from app.observability.tracing import get_tracer
+from app.prompts.system_prompts import ASPECT_SENTIMENT_SYSTEM_PROMPT
+from app.prompts.agent_prompts import build_aspect_sentiment_user_prompt
 
 logger = get_logger("aspect.sentiment")
 
@@ -105,32 +107,13 @@ class AspectSentimentService:
 
         text = self._join_evidence(evidence)
 
-        prompt = f"""
-You are an aspect-based sentiment analyst.
-
-Your task is to judge sentiment for one product aspect using only the provided review evidence.
-
-Aspect: {aspect.replace("_", " ")}
-
-Rules:
-- Use only the review evidence.
-- Output one of: positive, negative, mixed
-- Also output a confidence score from 0.0 to 1.0
-- Output valid JSON only
-- Do not include markdown
-
-Review evidence:
-{text}
-
-Return:
-{{
-  "label": "positive",
-  "score": 0.85
-}}
-""".strip()
+        user_prompt = build_aspect_sentiment_user_prompt(aspect, text)
 
         try:
-            raw = self.llm.generate_text(prompt)
+            raw = self.llm.generate_text(
+                user_prompt,
+                system_prompt=ASPECT_SENTIMENT_SYSTEM_PROMPT,
+            )
             parsed = json.loads(raw)
             final_label = self._normalize_label(parsed.get("label", "mixed"))
             score = float(parsed.get("score", 0.5))

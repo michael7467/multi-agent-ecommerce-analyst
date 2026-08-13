@@ -6,7 +6,7 @@ from opentelemetry.trace import get_current_span
 from app.api.dependencies import get_orchestrator
 from app.api.errors import APIError
 from app.api.schemas.analysis import AnalyzeRequest, AnalyzeResponse
-from app.agents.dynamic_orchestrator import DynamicOrchestrator
+from app.agents.langgraph_orchestrator import LangGraphOrchestrator
 from app.logging.logger import get_logger
 
 router = APIRouter(tags=["analysis"])
@@ -24,7 +24,7 @@ def _get_trace_id() -> str | None:
 def analyze_product(
     payload: AnalyzeRequest,
     request: Request,
-    orchestrator: DynamicOrchestrator = Depends(get_orchestrator),
+    orchestrator: LangGraphOrchestrator = Depends(get_orchestrator),
 ) -> AnalyzeResponse:
 
     trace_id = _get_trace_id()

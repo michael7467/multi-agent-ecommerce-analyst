@@ -11,15 +11,7 @@ class ReviewsLoader:
     Load local review data from JSONL/CSV/Parquet and normalize columns.
     """
 
-    # product_id deliberately NOT handled through this rename loop.
-    # OUTPUT_COLUMNS wants product_id, asin, and parent_asin to all exist
-    # as separate columns -- but a rename CONSUMES the source column name,
-    # so mapping "parent_asin" -> "product_id" here would mean parent_asin
-    # no longer exists under its own name afterward. product_id is instead
-    # built by COPYING from parent_asin/asin, in the fallback block below,
-    # which preserves all three. (An earlier version of this fix tried
-    # including product_id here with the "correct" mapping and broke this
-    # exact thing -- worth the explicit note so it doesn't happen again.)
+
     COLUMN_CANDIDATES = {
         "review_text": ["text", "reviewText", "review_text"],
         "rating": ["rating", "overall", "score"],

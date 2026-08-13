@@ -38,9 +38,12 @@ COPY . /app
 RUN useradd -m appuser
 
 # Same reasoning as Dockerfile.api -- see the comment there. Scoped to the
-# whole /app tree now, not just artifacts/ -- COPY . /app leaves everything
+# whole /app tree, not just artifacts/ -- COPY . /app leaves everything
 # root-owned, including data/eval/ where evaluation cache files get written.
-RUN mkdir -p /app/artifacts/memory /app/artifacts/qdrant_storage && \
+# qdrant_storage removed from the mkdir below, same reasoning as
+# Dockerfile.api -- streamlit talks to Qdrant over the network now too,
+# not local disk.
+RUN mkdir -p /app/artifacts/memory && \
     chown -R appuser:appuser /app
 
 USER appuser

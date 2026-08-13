@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 from qdrant_client import models
+from fastembed import SparseTextEmbedding
 
 from app.rag.qdrant_client_manager import get_qdrant_client
 from app.logging.logger import get_logger
@@ -13,11 +14,14 @@ from app.config.settings import settings
 logger = get_logger("qdrant.index_builder")
 
 COLLECTION_NAME = settings.qdrant_collection_name
+DENSE_VECTOR_NAME = "dense"
+SPARSE_VECTOR_NAME = "bm25"
 
 
 class QdrantIndexBuilder:
     def __init__(self) -> None:
         self.client = get_qdrant_client()
+        self.sparse_model = SparseTextEmbedding("Qdrant/bm25")
 
     def create_or_replace_collection(self, vector_size: int) -> None:
         if self.client.collection_exists(COLLECTION_NAME):
@@ -25,22 +29,44 @@ class QdrantIndexBuilder:
 
         self.client.create_collection(
             collection_name=COLLECTION_NAME,
-            vectors_config=models.VectorParams(
-                size=vector_size,
-                distance=models.Distance.COSINE,
-            ),
+            vectors_config={
+                DENSE_VECTOR_NAME: models.VectorParams(
+                    size=vector_size,
+                    distance=models.Distance.COSINE,
+                ),
+            },
+            sparse_vectors_config={
+                SPARSE_VECTOR_NAME: models.SparseVectorParams(),
+            },
         )
 
-    def upload_points(self, embeddings: np.ndarray, metadata_df: pd.DataFrame) -> None:
+    def upload_points(self, embeddings: np.ndarray, metadata_df: pd.DataFrame, batch_size: int = 256) -> None:
         payloads = metadata_df.to_dict(orient="records")
         ids = list(range(len(metadata_df)))
 
-        self.client.upload_collection(
-            collection_name=COLLECTION_NAME,
-            vectors=embeddings,
-            payload=payloads,
-            ids=ids,
-        )
+        texts = metadata_df["document_text"].tolist()
+        sparse_vectors = list(self.sparse_model.embed(texts))
+
+        points = [
+            models.PointStruct(
+                id=ids[i],
+                vector={
+                    DENSE_VECTOR_NAME: embeddings[i].tolist(),
+                    SPARSE_VECTOR_NAME: models.SparseVector(
+                        indices=sparse_vectors[i].indices.tolist(),
+                        values=sparse_vectors[i].values.tolist(),
+                    ),
+                },
+                payload=payloads[i],
+            )
+            for i in range(len(metadata_df))
+        ]
+
+        total_batches = (len(points) + batch_size - 1) // batch_size
+        for batch_num, start in enumerate(range(0, len(points), batch_size), start=1):
+            batch = points[start : start + batch_size]
+            self.client.upsert(collection_name=COLLECTION_NAME, points=batch)
+            logger.info(f"Uploaded batch {batch_num}/{total_batches} ({len(batch)} points)")
 
     @traced_agent("qdrant_index_build")
     def build(self) -> None:
@@ -73,7 +99,7 @@ class QdrantIndexBuilder:
 
         logger.info(
             f"Built Qdrant collection '{COLLECTION_NAME}' "
-            f"with {len(metadata_df)} points (dim={vector_size})"
+            f"with {len(metadata_df)} points (dim={vector_size}, hybrid dense+bm25)"
         )
 
     def close(self) -> None:

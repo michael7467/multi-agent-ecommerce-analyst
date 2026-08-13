@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from app.agents.planning_agent import PlanningAgent
-from app.agents.dynamic_orchestrator import DynamicOrchestrator
+from app.agents.langgraph_orchestrator import LangGraphOrchestrator
 from app.logging.logger import get_logger
 from app.evaluation.eval_history import save_eval_run
 from app.evaluation.metrics.agentic_metrics import (
@@ -24,7 +24,7 @@ logger = get_logger("evaluation.agentic")
 class AgenticEvaluator:
     def __init__(self) -> None:
         self.planning_agent = PlanningAgent()
-        # Lazy, same reasoning as GenerationEvaluator: DynamicOrchestrator
+        # Lazy, same reasoning as GenerationEvaluator: LangGraphOrchestrator
         # constructs ~19 agents (a real Qdrant connection among them).
         # evaluate_routing() alone only needs planning_agent -- confirmed
         # this was being paid for unnecessarily when a routing-only eval
@@ -32,9 +32,9 @@ class AgenticEvaluator:
         self._orchestrator = None
 
     @property
-    def orchestrator(self) -> DynamicOrchestrator:
+    def orchestrator(self) -> LangGraphOrchestrator:
         if self._orchestrator is None:
-            self._orchestrator = DynamicOrchestrator()
+            self._orchestrator = LangGraphOrchestrator()
         return self._orchestrator
 
     def evaluate_routing(self, query: str, expected_true: list[str]) -> dict:

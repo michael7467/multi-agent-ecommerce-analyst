@@ -1,0 +1,17 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: "multi-agent-ecommerce-analyst-api"
+    metrics_path: /metrics
+    # Authorization: Bearer is the one mechanism Prometheus natively,
+    # reliably sends for scrape authentication -- confirmed against
+    # Prometheus's own documented behavior and open GitHub issues before
+    # writing this, since arbitrary custom headers (like X-API-Key) are
+    # not natively supported in scrape configs at all. The middleware
+    # was extended specifically to accept this header, alongside the
+    # existing X-API-Key/query-param mechanism, not instead of it.
+    bearer_token: "${PROMETHEUS_BEARER_TOKEN}"
+    static_configs:
+      - targets: ["api:8000"]

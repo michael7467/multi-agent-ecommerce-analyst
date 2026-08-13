@@ -13,21 +13,7 @@ logger = get_logger("evaluation.visual_retrieval")
 
 
 class VisualRetrievalEvaluator:
-    """Visual retrieval hit rate, and optionally image-text alignment.
-
-    Hit rate needs nothing but product_ids: across a set of them, how
-    often does image-based similar-product retrieval actually return
-    results. This is image-to-image retrieval (find products that LOOK
-    like this one) -- ImageRetriever.search_by_product() doesn't take a
-    text query, so hit rate alone can't say anything about whether the
-    results are good matches to a query, only whether the pipeline works.
-
-    Passing a vision_judge and a query per product adds image-text
-    alignment on top: for each retrieved product's image, does it
-    actually match what that query was asking about, as judged by a
-    vision-capable LLM looking at the real image. This is what actually
-    answers "are these good matches", which hit rate alone can't.
-    """
+  
 
     def __init__(self, vision_judge=None) -> None:
         self.retriever = ImageRetriever()
@@ -46,11 +32,6 @@ class VisualRetrievalEvaluator:
         outcome = classify_visual_retrieval_outcome(retrieved_count=count, exception=None)
         record = {"product_id": product_id, "outcome": outcome, "retrieved_count": count}
 
-        # Alignment scoring is opt-in per call: needs both a query (what
-        # is this retrieval even for) and a judge (something that can
-        # actually look at the images). Without either, this is silently
-        # skipped rather than computed as some default -- there's nothing
-        # honest to compute it from.
         if query and self.vision_judge and count > 0:
             aligned_flags = []
             for _, row in results.iterrows():

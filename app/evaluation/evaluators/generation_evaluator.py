@@ -5,7 +5,7 @@ from pathlib import Path
 
 from app.logging.logger import get_logger
 from app.evaluation.eval_history import save_eval_run
-from app.agents.dynamic_orchestrator import DynamicOrchestrator
+from app.agents.langgraph_orchestrator import LangGraphOrchestrator
 from app.services.report_service import ReportService
 from app.evaluation.judges.faithfulness_judge import FaithfulnessJudge
 from app.evaluation.judges.llm_relevance_judge import LLMRelevanceJudge
@@ -56,7 +56,7 @@ class GenerationEvaluator:
     """
 
     def __init__(self) -> None:
-        # Lazy: DynamicOrchestrator constructs ~19 sub-agents. Only run()
+        # Lazy: LangGraphOrchestrator constructs ~19 sub-agents. Only run()
         # needs it (to get a real report per test case); evaluate() alone
         # -- e.g. called once with an already-computed report, like
         # run_all_eval.py does -- shouldn't pay for that construction.
@@ -66,9 +66,9 @@ class GenerationEvaluator:
         self.relevance_judge = LLMRelevanceJudge()
 
     @property
-    def orchestrator(self) -> DynamicOrchestrator:
+    def orchestrator(self) -> LangGraphOrchestrator:
         if self._orchestrator is None:
-            self._orchestrator = DynamicOrchestrator()
+            self._orchestrator = LangGraphOrchestrator()
         return self._orchestrator
 
     def evaluate(self, analysis_result: dict, report: str, query: str) -> dict:

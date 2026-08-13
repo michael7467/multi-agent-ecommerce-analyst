@@ -50,18 +50,6 @@ class MemoryAgent(BaseAgent):
         title = analysis_result.get("title", "")
         report = analysis_result.get("report")
 
-        # analysis_result["last_predicted_class"] and analysis_result["price_class"]
-        # are never actually set anywhere in dynamic_orchestrator.py -- confirmed by
-        # grepping the whole pipeline, not just this file. The one I'm confident
-        # about and have fixed: "last_predicted_class" only ever exists nested
-        # under analysis_result["memory"]["last_predicted_class"] (that's the
-        # exact shape get_product_memory returns, a few lines above), not at the
-        # top level, so this fallback could never actually fire -- it looked like
-        # a deliberate "reuse the prior known class if this request didn't run
-        # forecasting" fallback, but was checking a path that never has a value.
-        # The "price_class" and "forecast" attempts I'm leaving as-is: I don't
-        # have evidence they're ever populated either, but I also haven't seen
-        # every caller of this method, so I'm not confident enough to delete them.
         memory = analysis_result.get("memory") or {}
 
         predicted_class = (

@@ -6,3 +6,29 @@ altair
 torch
 torchvision
 python-json-logger
+# NEWLY FOUND: streamlit_app.py directly imports and runs
+# DynamicOrchestrator (the OLD orchestrator, not LangGraphOrchestrator)
+# -- a real, separate code path from the api service, not an HTTP
+# client of it as previously assumed. That means it needs close to the
+# same ML dependency set as requirements-api.txt, not a lighter UI-only
+# subset.
+openai
+transformers
+sentence-transformers
+bertopic
+umap-learn
+hdbscan
+nltk
+fastembed
+# Included out of caution, not certainty -- critic_agent.py was
+# upgraded to LangChain's structured output this session, and if
+# DynamicOrchestrator still calls it, this would be needed
+# transitively. Not langgraph itself, since that's specific to the new
+# orchestrator this old one doesn't use.
+# langgraph added specifically because of the migration to
+# LangGraphOrchestrator in streamlit_app.py -- correctly excluded before
+# this point, since DynamicOrchestrator genuinely didn't need it. Now
+# it's the entire foundation of what streamlit_app.py imports.
+langgraph
+langchain
+langchain-openai

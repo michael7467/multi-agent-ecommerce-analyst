@@ -12,3 +12,29 @@ hdbscan
 nltk
 altair
 python-json-logger
+# Pinned to the exact version the MCP server/client code was actually
+# verified against (2.0.0) -- this library's API changed meaningfully
+# between versions during that testing (streamable_http_client naming,
+# input_schema vs inputSchema, and others), so an unpinned install
+# could pull something incompatible and reintroduce this same class of
+# crash in a less obvious way.
+mcp==2.0.0
+# BM25 sparse side of hybrid retrieval, runs on every /analyze request
+# via retrieval_agent, not just at index-build time.
+fastembed
+# For train_text_model_mlflow.py, run inside this same container via
+# docker compose exec.
+mlflow
+skops
+# NEWLY FOUND while checking Dockerfile.api directly -- not in any of
+# your 6 uploaded files, and the entire orchestrator is built on
+# langgraph.graph.StateGraph, with critic_agent.py using
+# ChatOpenAI(...).with_structured_output(...) specifically, which
+# needs langchain-openai (a separate package from bare langchain).
+# Not version-pinned -- unlike mcp, I don't have a specific version
+# number directly verified from this session's actual work to pin
+# against. If you know which version you originally developed against,
+# pinning to that would be safer than leaving this open-ended.
+langgraph
+langchain
+langchain-openai

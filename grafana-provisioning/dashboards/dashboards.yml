@@ -1,0 +1,15 @@
+apiVersion: 1
+
+providers:
+  - name: "AI Platform Dashboards"
+    orgId: 1
+    folder: ""
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      # Existing 14-panel dashboard from earlier this session
+      # (k8s/observability/dashboards/ai-platform.json) -- mounted into
+      # this exact path below, in docker-compose.yml.
+      path: /etc/grafana/provisioning/dashboards/json

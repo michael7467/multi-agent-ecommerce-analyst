@@ -49,6 +49,33 @@ jobs:
         run: python -m compileall app
 
       # -----------------------------
+      # Eval-to-CI regression gate. Runs BEFORE the docker build/push
+      # steps below, deliberately -- the whole point of a gate is
+      # blocking what comes after it, so it has to run first, not
+      # alongside or after image publishing.
+      #
+      # REAL PREREQUISITE, not something this workflow file can satisfy
+      # on its own: this connects to a PERSISTENT, already-populated
+      # Qdrant + Redis deployment via secrets below, not fresh service
+      # containers spun up for this job. run_ci_gate.py actually
+      # constructs and runs the full LangGraphOrchestrator -- real
+      # OpenAI calls, real Qdrant queries against the hybrid
+      # dense+sparse collection built earlier this session, real Redis
+      # caching. A freshly-spun-up Qdrant container would be completely
+      # empty -- nothing to query -- and rebuilding the full data
+      # pipeline (a few hundred thousand reviews, real embeddings) from
+      # scratch on every single PR would make this gate impractically
+      # slow and expensive. QDRANT_URL/REDIS_URL need to point at a
+      # real, already-built deployment reachable from GitHub's runners,
+      # not localhost service containers.
+      - name: Run eval regression gate
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          QDRANT_URL: ${{ secrets.QDRANT_URL }}
+          REDIS_URL: ${{ secrets.REDIS_URL }}
+        run: python -m app.evaluation.run_ci_gate
+
+      # -----------------------------
       # Docker buildx setup
       # -----------------------------
       - name: Set up Docker Buildx

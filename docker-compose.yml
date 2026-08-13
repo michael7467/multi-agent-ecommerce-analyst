@@ -8,19 +8,42 @@ services:
       - "8000:8000"
     environment:
       OPENAI_API_KEY: ${OPENAI_API_KEY}
+      # Was missing here entirely -- caught only while adding this same
+      # var to streamlit below and checking rather than assuming this
+      # side already had it. Without it, settings.admin_api_keys always
+      # reads as empty, meaning no key could ever be recognized as
+      # admin -- /metrics and /admin/rebuild-index would permanently
+      # reject every request, including a genuinely valid admin key.
+      ADMIN_API_KEYS: ${ADMIN_API_KEYS}
       REDIS_URL: redis://redis:6379/0
       OTEL_SERVICE_NAME: multi-agent-ecommerce-analyst-api
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
       OTEL_TRACES_EXPORTER_MODE: otlp
       PRODUCT_MEMORY_PATH: /app/artifacts/memory/product_memory.db
-      QDRANT_STORAGE_PATH: /app/artifacts/qdrant_storage
+      QDRANT_MODE: server
+      QDRANT_URL: http://qdrant:6333
       EVAL_HISTORY_DB_PATH: /app/artifacts/eval_history/eval_runs.db
     volumes:
       - product_memory:/app/artifacts/memory
-      - qdrant_storage:/app/artifacts/qdrant_storage
       - eval_history:/app/artifacts/eval_history
+      # NEWLY ADDED -- the actual root cause of both the raw-data and
+      # processed-data FileNotFoundErrors. .dockerignore excludes
+      # data/*/* and artifacts/*/* from every image build (by design --
+      # baking a quarter-million reviews into an image would be the
+      # wrong approach). But with no volume connecting host and
+      # container either, the container had no way to see host-side
+      # data at all, in either direction. Bind mounts specifically, not
+      # named volumes like product_memory/eval_history above, since
+      # this is host-authored/inspectable data (raw dataset files,
+      # processed CSVs, trained model artifacts) you'll want to browse
+      # directly from Explorer or Git Bash, not opaque Docker-managed
+      # state.
+      - ./data:/app/data
+      - ./artifacts:/app/artifacts
     depends_on:
       redis:
+        condition: service_healthy
+      qdrant:
         condition: service_healthy
     restart: unless-stopped
     networks:
@@ -35,20 +58,64 @@ services:
       - "8501:8501"
     environment:
       OPENAI_API_KEY: ${OPENAI_API_KEY}
+      # Same source of truth as the api service's RBAC -- not a second,
+      # separately-configured admin credential set. Without this, the
+      # streamlit-side require_admin() gate has literally nothing valid
+      # to compare against, confirmed directly by testing (Test 4:
+      # fails closed, not open, when this is missing).
+      ADMIN_API_KEYS: ${ADMIN_API_KEYS}
       REDIS_URL: redis://redis:6379/0
       OTEL_SERVICE_NAME: multi-agent-ecommerce-analyst-ui
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
       OTEL_TRACES_EXPORTER_MODE: otlp
       PRODUCT_MEMORY_PATH: /app/artifacts/memory/product_memory.db
-      QDRANT_STORAGE_PATH: /app/artifacts/qdrant_storage
+      QDRANT_MODE: server
+      QDRANT_URL: http://qdrant:6333
       EVAL_HISTORY_DB_PATH: /app/artifacts/eval_history/eval_runs.db
     volumes:
       - product_memory:/app/artifacts/memory
-      - qdrant_storage:/app/artifacts/qdrant_storage
       - eval_history:/app/artifacts/eval_history
+      # Same fix as api above, same reasoning -- streamlit_app.py runs
+      # LangGraphOrchestrator directly in-process, not just calling api
+      # over HTTP, so it needs the same data/artifacts visibility api
+      # does.
+      - ./data:/app/data
+      - ./artifacts:/app/artifacts
     depends_on:
       redis:
         condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - backend
+
+  # Qdrant now runs as its own server, not embedded in api/streamlit. This
+  # is the actual fix for the single-process lock issue hit earlier this
+  # session (evaluators couldn't run alongside the live api without
+  # stopping it first) -- multiple clients can now connect to one shared
+  # server over the network instead of each needing exclusive access to
+  # the same on-disk storage directory. get_qdrant_client() already
+  # supported this mode via QDRANT_MODE=server; no application code
+  # changed, only this config.
+  qdrant:
+    image: qdrant/qdrant:v1.18.2
+    container_name: qdrant
+    # No host port mapping, same reasoning as redis below -- api/streamlit
+    # only ever need qdrant over the internal backend network.
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    healthcheck:
+      # Qdrant's image deliberately has no curl/wget/nc (confirmed against
+      # qdrant/qdrant#4250 and #3491 on GitHub -- removed for security,
+      # not an oversight), so a curl-based healthcheck silently fails.
+      # This uses bash's built-in /dev/tcp instead, no external binary
+      # needed -- the same pattern Qdrant uses in their own official
+      # tools/compose/docker-compose.yaml.
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/127.0.0.1/6333' || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
     networks:
       - backend
@@ -85,6 +152,56 @@ services:
     networks:
       - backend
 
+  # Scrapes the api service's already-instrumented /metrics endpoint.
+  # Config is a bind-mounted, already-generated file (run
+  # generate-prometheus-config.sh first) -- the official Prometheus image
+  # is unmodified/stock, deliberately, since it runs as an unprivileged
+  # user on a minimal base with no confirmed shell/envsubst access.
+  # Substituting the admin bearer token into the config happens on the
+  # host, before this container ever starts, not inside it.
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    depends_on:
+      - api
+    restart: unless-stopped
+    networks:
+      - backend
+
+  # The actual admin-facing observability UI. Unlike prometheus/qdrant/
+  # redis, this deliberately DOES get a host port -- it's meant to be
+  # opened directly in a browser, not just reached internally by other
+  # services.
+  grafana:
+    image: grafana/grafana:11.3.1
+    container_name: grafana
+    environment:
+      # Overrides Grafana's default admin/admin -- left as the default
+      # would be a real, live credential exposed the moment this port is
+      # reachable at all.
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    volumes:
+      - ./grafana-provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana-provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      # The existing 14-panel dashboard JSON from earlier this session
+      # (k8s/observability/dashboards/ai-platform.json) needs to actually
+      # be copied to this local path for the provisioning config above to
+      # find it -- not done here, since that file's current content
+      # wasn't available in this sandbox to verify before placing it.
+      - ./grafana-provisioning/dashboards/json:/etc/grafana/provisioning/dashboards/json:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3001:3000"
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    networks:
+      - backend
+
 volumes:
   redis_data:
   # Shared between api and streamlit so both see the same product_memory.db
@@ -95,16 +212,17 @@ volumes:
   # containers can still race writing to this file; a real database
   # server is the actual fix for that, this just stops losing data on restart.
   product_memory:
-  # Same reasoning, same fix, for the embedded Qdrant instance -- qdrant_mode
-  # defaults to "local" (on-disk, no separate server), so without this the
-  # review-embeddings collection would be rebuilt from nothing, separately,
-  # in each container, and lost on every restart.
+  # Persists Qdrant's data across restarts -- now mounted into the qdrant
+  # service itself (not into api/streamlit, since neither touches local
+  # disk for vector data anymore in server mode).
   qdrant_storage:
   # Same reasoning again -- the eval history SQLite DB is created at
   # runtime by app/evaluation/eval_history.py, not baked into the image.
   # Without this, "track results across runs" would silently stop working
   # on every rebuild, defeating the entire point of this feature.
   eval_history:
+  prometheus_data:
+  grafana_data:
 
 networks:
   backend:

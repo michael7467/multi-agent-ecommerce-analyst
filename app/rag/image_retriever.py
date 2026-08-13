@@ -37,24 +37,10 @@ class ImageRetriever:
                 f"FAISS index size ({self.index.ntotal}) does not match metadata rows ({len(self.metadata)})"
             )
 
-        # search_by_product below uses a row's index LABEL directly as its
-        # POSITION in the FAISS index (via index.reconstruct()). A fresh
-        # read_csv() already gives a clean 0..n-1 range today, so this
-        # changes nothing right now -- it's here so a future filter added
-        # above this line (e.g. dropping rows with missing images) can't
-        # silently break that alignment. Same fix as RecommenderService
-        # last turn, more consequential here since it feeds reconstruct()
-        # directly rather than a matrix lookup.
+
         self.metadata = self.metadata.reset_index(drop=True)
 
-        # index.reconstruct() only works directly on flat indexes.
-        # IndexIVF-family indexes raise "direct map is not initialized"
-        # unless make_direct_map() has been called first (confirmed
-        # against FAISS's own docs/issue tracker, not assumed) -- and nothing
-        # in this codebase calls it anywhere. hasattr guards this so it's a
-        # no-op for flat indexes (which don't have this method at all) and
-        # a real fix for IVF-family ones, without needing to know which
-        # this actually is.
+ 
         if hasattr(self.index, "make_direct_map"):
             self.index.make_direct_map()
 

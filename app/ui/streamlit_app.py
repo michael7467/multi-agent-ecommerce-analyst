@@ -3,7 +3,7 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
-from app.agents.dynamic_orchestrator import DynamicOrchestrator
+from app.agents.langgraph_orchestrator import LangGraphOrchestrator
 
 from app.observability.tracing import setup_tracing
 
@@ -36,8 +36,8 @@ st.set_page_config(
 
 
 @st.cache_resource
-def load_orchestrator() -> DynamicOrchestrator:
-    return DynamicOrchestrator()
+def load_orchestrator() -> LangGraphOrchestrator:
+    return LangGraphOrchestrator()
 
 
 def render_header() -> None:

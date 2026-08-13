@@ -1,28 +1,33 @@
 from __future__ import annotations
 
 import re
+import sqlite3
 from pathlib import Path
 import pandas as pd
 
 from app.agents.base_agent import BaseAgent
 from app.logging.logger import get_logger
 from app.observability.agent_tracing import traced_agent
-from app.config.paths import TOPIC_KEYWORDS_PATH
+from app.config.paths import TOPIC_KEYWORDS_DB_PATH
 
 logger = get_logger("agents.topic")
 
 class TopicAgent(BaseAgent):
-    def __init__(self, topic_keywords_path: str | Path = TOPIC_KEYWORDS_PATH) -> None:
+    def __init__(self, topic_keywords_db_path: str | Path = TOPIC_KEYWORDS_DB_PATH) -> None:
         super().__init__(name="TopicAgent")
-        self.topic_keywords_path = Path(topic_keywords_path)
+        self.db_path = Path(topic_keywords_db_path)
 
-        if not self.topic_keywords_path.exists():
+        if not self.db_path.exists():
             raise FileNotFoundError(
-                f"Topic keywords file not found: {self.topic_keywords_path}"
+                f"Topic keywords DB not found: {self.db_path}"
             )
 
         try:
-            self.topic_df = pd.read_csv(self.topic_keywords_path)
+            with sqlite3.connect(self.db_path) as conn:
+                self.topic_df = pd.read_sql_query(
+                    "SELECT topic_id, topic_name, count, keywords FROM topics",
+                    conn,
+                )
         except Exception:
             logger.error(f"{self.name}: failed to load topic keywords", exc_info=True)
             raise
@@ -30,7 +35,7 @@ class TopicAgent(BaseAgent):
         required_cols = ["topic_id", "topic_name", "count", "keywords"]
         for col in required_cols:
             if col not in self.topic_df.columns:
-                raise RuntimeError(f"TopicAgent: missing column '{col}' in topic CSV")
+                raise RuntimeError(f"TopicAgent: missing column '{col}' in topics table")
 
         # remove BERTopic outlier topic
         self.topic_df = self.topic_df[self.topic_df["topic_id"] != -1].copy()
@@ -43,11 +48,6 @@ class TopicAgent(BaseAgent):
             "return", "refund", "weak", "noisy", "hollow", "disconnect",
             "slow", "fail", "failed"
         ]
-        # "noise" (not "noisy") used to be on this list. Word-boundary
-        # matching alone doesn't fix it: "noise" is a real whole word
-        # inside "noise cancellation" / "noise cancelling", which are
-        # normally positive feature topics for this product category, not
-        # complaints. "noisy" doesn't have that collision.
 
         def is_pain_topic(keywords: str) -> bool:
             kw = str(keywords).lower()
@@ -76,9 +76,6 @@ class TopicAgent(BaseAgent):
         if not isinstance(top_k, int) or top_k <= 0:
             raise ValueError("TopicAgent: top_k must be a positive integer")
 
-        # "count" is guaranteed present (validated in __init__), and
-        # sort_values() already returns an independent object -- no need
-        # to copy self.topic_df first just to immediately discard it.
         df = self.topic_df.sort_values(by="count", ascending=False)
 
         top_themes = [

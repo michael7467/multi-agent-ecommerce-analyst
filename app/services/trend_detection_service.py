@@ -5,15 +5,24 @@ import pandas as pd
 from app.config.paths import FEATURES_PATH, REVIEWS_PATH
 from app.agents.data_agent import _load_features_df
 
+_REVIEWS_DF_CACHE: pd.DataFrame | None = None
+
+
+def _load_reviews_df() -> pd.DataFrame:
+    # Same module-level caching pattern as _load_features_df in
+    # data_agent.py -- reviews_df is the larger of the two files and
+    # was being re-read fresh on every TrendDetectionService()
+    # construction with no caching at all.
+    global _REVIEWS_DF_CACHE
+    if _REVIEWS_DF_CACHE is None:
+        _REVIEWS_DF_CACHE = pd.read_csv(REVIEWS_PATH)
+    return _REVIEWS_DF_CACHE
+
 
 class TrendDetectionService:
     def __init__(self) -> None:
-        # Shared cache -- see _load_features_df in data_agent.py. Without
-        # this, every independent construction of this service re-reads
-        # and re-parses the same features CSV that DataAgent (and now this
-        # service) both need.
         self.features_df = _load_features_df()
-        self.reviews_df = pd.read_csv(REVIEWS_PATH)
+        self.reviews_df = _load_reviews_df()
 
     def analyze(self) -> dict:
         df = self.reviews_df.copy()
@@ -51,25 +60,6 @@ class TrendDetectionService:
         }
 
     def _parse_review_datetime(self, timestamps: pd.Series) -> pd.Series:
-        """Unix timestamps here can apparently be seconds or milliseconds.
-
-        The previous approach parsed as milliseconds first and fell back to
-        seconds only where that produced NaT. That fallback never actually
-        fires for the realistic case: a genuine seconds-timestamp (e.g.
-        Amazon's unixReviewTime format, which review_timestamp very likely
-        comes from -- see reviews_loader.py's COLUMN_CANDIDATES) misread as
-        milliseconds doesn't error or go out of range, it silently lands on
-        some valid-but-wrong date a few weeks after epoch. Verified: every
-        realistic 2015-2024 seconds-timestamp parses "successfully" as ms
-        to a January-1970 date, no NaT produced, so the seconds fallback
-        never triggers and every review silently gets the wrong date.
-
-        Detecting the unit from magnitude instead: seconds-since-epoch for
-        any real-world date is at most ~2e9 (year 2033ish); nothing that
-        small can plausibly be milliseconds for a post-2000 date, where
-        milliseconds values start around 9.5e11. The two ranges don't
-        overlap, so this is unambiguous rather than a guess.
-        """
         is_seconds = timestamps.abs() < 1e11
 
         result = pd.Series(pd.NaT, index=timestamps.index, dtype="datetime64[ns]")
@@ -100,112 +90,78 @@ class TrendDetectionService:
 
     def _detect_rising_categories(self, df: pd.DataFrame, top_k: int = 5) -> list[dict]:
         monthly = self._monthly_category_counts(df)
-
         rows = []
         for category, group in monthly.groupby("main_category"):
             counts = group["review_count"].tolist()
             score = self._trend_score(counts)
-            rows.append(
-                {
-                    "category": category,
-                    "trend_score": score,
-                    "latest_review_count": int(group["review_count"].iloc[-1]),
-                }
-            )
-
+            rows.append({
+                "category": category,
+                "trend_score": score,
+                "latest_review_count": int(group["review_count"].iloc[-1]),
+            })
         result = pd.DataFrame(rows).sort_values("trend_score", ascending=False)
         return result.head(top_k).to_dict(orient="records")
 
     def _detect_declining_categories(self, df: pd.DataFrame, top_k: int = 5) -> list[dict]:
         monthly = self._monthly_category_counts(df)
-
         rows = []
         for category, group in monthly.groupby("main_category"):
             counts = group["review_count"].tolist()
             score = self._trend_score(counts)
-            rows.append(
-                {
-                    "category": category,
-                    "trend_score": score,
-                    "latest_review_count": int(group["review_count"].iloc[-1]),
-                }
-            )
-
+            rows.append({
+                "category": category,
+                "trend_score": score,
+                "latest_review_count": int(group["review_count"].iloc[-1]),
+            })
         result = pd.DataFrame(rows).sort_values("trend_score", ascending=True)
         return result.head(top_k).to_dict(orient="records")
 
     def _detect_seasonal_patterns(self, df: pd.DataFrame, top_k: int = 5) -> list[dict]:
         seasonal = df.copy()
         seasonal["month"] = seasonal["review_datetime"].dt.month
-
         grouped = (
             seasonal.groupby(["main_category", "month"])
             .size()
             .reset_index(name="review_count")
         )
-
         rows = []
         for category, group in grouped.groupby("main_category"):
             peak_row = group.sort_values("review_count", ascending=False).iloc[0]
-            rows.append(
-                {
-                    "category": category,
-                    "peak_month": int(peak_row["month"]),
-                    "peak_review_count": int(peak_row["review_count"]),
-                }
-            )
-
+            rows.append({
+                "category": category,
+                "peak_month": int(peak_row["month"]),
+                "peak_review_count": int(peak_row["review_count"]),
+            })
         result = pd.DataFrame(rows).sort_values("peak_review_count", ascending=False)
         return result.head(top_k).to_dict(orient="records")
 
     def _detect_emerging_complaints(self, df: pd.DataFrame, top_k: int = 5) -> list[dict]:
         complaint_keywords = [
-            "broken",
-            "broke",
-            "bad",
-            "poor",
-            "problem",
-            "issue",
-            "issues",
-            "defect",
-            "defective",
-            "refund",
-            "return",
-            "hollow",
-            "disconnect",
-            "slow",
-            "failed",
-            "does not work",
+            "broken", "broke", "bad", "poor", "problem", "issue", "issues",
+            "defect", "defective", "refund", "return", "hollow",
+            "disconnect", "slow", "failed", "does not work",
         ]
-
         temp = df.copy()
         temp["review_text"] = temp["review_text"].fillna("").astype(str).str.lower()
-
         rows = []
         for keyword in complaint_keywords:
             pattern = r"\b" + re.escape(keyword) + r"\b"
             matched = temp[temp["review_text"].str.contains(pattern, regex=True, na=False)]
             if matched.empty:
                 continue
-
             monthly = (
                 matched.groupby("year_month")
                 .size()
                 .reset_index(name="count")
                 .sort_values("year_month")
             )
-
             score = self._trend_score(monthly["count"].tolist())
-            rows.append(
-                {
-                    "complaint": keyword,
-                    "trend_score": score,
-                    "latest_count": int(monthly["count"].iloc[-1]),
-                }
-            )
-
+            rows.append({
+                "complaint": keyword,
+                "trend_score": score,
+                "latest_count": int(monthly["count"].iloc[-1]),
+            })
         if not rows:
             return []
-
         result = pd.DataFrame(rows).sort_values("trend_score", ascending=False)
         return result.head(top_k).to_dict(orient="records")

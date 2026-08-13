@@ -52,7 +52,10 @@ TOPIC_MODELING_OUTPUT_DIR = env_path(
     "TOPIC_MODELING_OUTPUT_DIR",
     "artifacts/topic_modeling"
 )
-
+TOPIC_KEYWORDS_DB_PATH = env_path(
+    "TOPIC_KEYWORDS_DB_PATH",
+    "artifacts/topics/topic_keywords.db"
+)
 EMBEDDINGS_PATH = env_path(
     "EMBEDDINGS_PATH",
     "artifacts/embeddings/review_embeddings.npy"

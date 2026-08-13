@@ -28,3 +28,6 @@ langgraph
 langchain
 langchain-openai
 python-json-logger
+
+pydantic
+pydantic-settings

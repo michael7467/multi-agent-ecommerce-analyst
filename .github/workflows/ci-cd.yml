@@ -14,6 +14,11 @@ jobs:
   test-and-build:
     runs-on: ubuntu-latest
 
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      QDRANT_URL: http://localhost:6333
+      REDIS_URL: redis://localhost:6379/0
+
     services:
       qdrant:
         image: qdrant/qdrant:latest
@@ -75,18 +80,12 @@ jobs:
           aws s3 sync s3://janoai/artifacts/embeddings/ artifacts/embeddings/
 
       - name: Build Qdrant index
-        env:
-          QDRANT_URL: http://localhost:6333
         run: python -m app.rag.qdrant_index_builder
 
       # -----------------------------
       # Eval gate
       # -----------------------------
       - name: Run eval regression gate
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          QDRANT_URL: http://localhost:6333
-          REDIS_URL: redis://localhost:6379/0
         run: python -m app.evaluation.runners.run_ci_gate
 
       # -----------------------------

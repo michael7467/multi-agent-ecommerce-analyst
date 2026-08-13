@@ -26,4 +26,5 @@ mlflow
 skops
 langgraph
 langchain
-langchain-openaipython-json-logger
+langchain-openai
+python-json-logger

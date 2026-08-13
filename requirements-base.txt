@@ -11,3 +11,4 @@ opentelemetry-api
 opentelemetry-sdk
 opentelemetry-exporter-otlp
 python-dotenv
+python-json-logger

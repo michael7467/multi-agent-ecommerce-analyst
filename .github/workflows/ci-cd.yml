@@ -75,8 +75,11 @@ jobs:
 
       - name: Download data and embeddings from S3
         run: |
-          mkdir -p data/processed artifacts/embeddings artifacts/topics artifacts/models
+          mkdir -p data/processed data/interim data/raw data/eval artifacts/embeddings artifacts/topics artifacts/models
           aws s3 sync s3://janoai/data/processed/ data/processed/
+          aws s3 sync s3://janoai/data/interim/ data/interim/
+          aws s3 sync s3://janoai/data/raw/ data/raw/
+          aws s3 sync s3://janoai/data/eval/ data/eval/
           aws s3 sync s3://janoai/artifacts/embeddings/ artifacts/embeddings/
           aws s3 sync s3://janoai/artifacts/topic_modeling/ artifacts/topics/
           aws s3 sync s3://janoai/artifacts/models/ artifacts/models/

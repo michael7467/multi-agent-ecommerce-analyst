@@ -9,10 +9,7 @@ _REVIEWS_DF_CACHE: pd.DataFrame | None = None
 
 
 def _load_reviews_df() -> pd.DataFrame:
-    # Same module-level caching pattern as _load_features_df in
-    # data_agent.py -- reviews_df is the larger of the two files and
-    # was being re-read fresh on every TrendDetectionService()
-    # construction with no caching at all.
+
     global _REVIEWS_DF_CACHE
     if _REVIEWS_DF_CACHE is None:
         _REVIEWS_DF_CACHE = pd.read_csv(REVIEWS_PATH)

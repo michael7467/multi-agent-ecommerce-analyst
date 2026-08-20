@@ -52,9 +52,7 @@ def save_eval_run(evaluator_type: str, summary: dict) -> None:
         conn.commit()
         conn.close()
     except Exception:
-        # Deliberately swallowed, not re-raised or even logged at error level --
-        # see docstring. A logger import here would be the only reason to fail
-        # a real eval run over a history-tracking side effect.
+
         pass
 
 

@@ -118,11 +118,7 @@ class AspectSentimentService:
             final_label = self._normalize_label(parsed.get("label", "mixed"))
             score = float(parsed.get("score", 0.5))
         except Exception:
-            # Covers a malformed/missing JSON response AND a present but
-            # non-numeric "score" (e.g. the LLM returns "score": "high") --
-            # the latter used to sit outside this try/except, so a
-            # well-formed-but-wrong-shaped response would raise uncaught
-            # instead of falling back like an actually-malformed one did.
+
             logger.error("LLM returned an unusable aspect sentiment response", exc_info=True)
             return {"aspect": aspect, "label": "mixed", "score": 0.5, "method": "llm_fallback"}
 

@@ -1,14 +1,6 @@
 from __future__ import annotations
 
-# Was app.agents.orchestrator.Orchestrator -- the legacy, always-runs-
-# every-agent-unconditionally implementation, not DynamicOrchestrator,
-# which is what dependencies.py actually wires up for the live API. Every
-# fix from this session (critical/non-critical, failed_steps, the
-# guardrail rewrite) lives in DynamicOrchestrator; evaluating the legacy
-# one exercised none of it. It's also why final_output[...] used to be
-# indexed directly without .get() -- the legacy orchestrator always
-# populates every field, so direct indexing never failed there.
-# DynamicOrchestrator's fields are conditional on the plan.
+
 from app.agents.langgraph_orchestrator import LangGraphOrchestrator
 
 

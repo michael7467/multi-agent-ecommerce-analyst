@@ -11,11 +11,7 @@ class CounterfactualAgent(BaseAgent):
 
     @traced_agent("CounterfactualAgent.run")
     def run(self, product_data: dict) -> dict:
-        # Kept, unlike the equivalent check removed from other agents:
-        # CounterfactualService._validate_product_data does
-        # "f not in product_data" with no isinstance check of its own, so
-        # None or a non-dict here would hit an unclear TypeError inside
-        # the service instead of this clean ValueError.
+
         if not isinstance(product_data, dict):
             raise ValueError("CounterfactualAgent: product_data must be a dict")
 

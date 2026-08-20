@@ -99,12 +99,7 @@ class LLMRelevanceJudge:
         try:
             raw = self.llm.generate_text(prompt)
         except Exception:
-            # Not cached, deliberately. This is a transient API problem
-            # (rate limit, network), not a judgment outcome -- caching it
-            # would freeze a temporary infrastructure failure into a
-            # permanent, silently-wrong "not relevant" answer that never
-            # gets retried on a later run, which is a worse failure mode
-            # than just paying for the retry.
+  
             logger.error(f"LLM call failed for query={query!r}", exc_info=True)
             fallback_usage_total.labels(component="llm_relevance_judge", reason="llm_call_failed").inc()
             return False
@@ -112,10 +107,7 @@ class LLMRelevanceJudge:
         parsed = _parse_yes_no(raw)
 
         if parsed is None:
-            # This one IS cached: the LLM responded, it just didn't say
-            # yes/no clearly. That's a real (if unfortunate) outcome of
-            # asking this specific question, not an infrastructure hiccup
-            # -- re-asking wouldn't reliably resolve it either.
+       
             logger.warning(f"Could not parse relevance judgment for query={query!r}, defaulting to not-relevant")
             parse_failure_total.labels(component="llm_relevance_judge").inc()
             fallback_usage_total.labels(component="llm_relevance_judge", reason="unparseable_response").inc()
@@ -127,10 +119,7 @@ class LLMRelevanceJudge:
             "review_snippet": review_text[:200],
         }
         self._new_judgments_this_run += 1
-        # Saved after every judgment, not just at the end -- an eval run
-        # over a large pool can be dozens of LLM calls; losing all of them
-        # to a crash or rate limit near the end would be a bad trade for
-        # the cost this cache exists to avoid paying twice.
+
         self._save_cache()
 
         return parsed

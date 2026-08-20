@@ -24,10 +24,7 @@ def _get_trace_id() -> str | None:
 
 @router.get("/health", response_model=HealthResponse)
 def health(request: Request) -> HealthResponse:
-    """
-    Liveness probe: returns OK if the API process is running.
-    Should NOT check external dependencies.
-    """
+ 
     trace_id = _get_trace_id()
     correlation_id = getattr(request.state, "correlation_id", None)
 
@@ -41,10 +38,7 @@ def health(request: Request) -> HealthResponse:
 
 @router.get("/ready", response_model=HealthResponse)
 def ready(request: Request) -> JSONResponse | HealthResponse:
-    """
-    Readiness probe: checks external dependencies.
-    If Redis (or future dependencies) are down, return 503.
-    """
+ 
     trace_id = _get_trace_id()
     correlation_id = getattr(request.state, "correlation_id", None)
 

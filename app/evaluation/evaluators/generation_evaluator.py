@@ -56,10 +56,7 @@ class GenerationEvaluator:
     """
 
     def __init__(self) -> None:
-        # Lazy: LangGraphOrchestrator constructs ~19 sub-agents. Only run()
-        # needs it (to get a real report per test case); evaluate() alone
-        # -- e.g. called once with an already-computed report, like
-        # run_all_eval.py does -- shouldn't pay for that construction.
+   
         self._orchestrator = None
         self.report_service = ReportService()
         self.faithfulness_judge = FaithfulnessJudge()
@@ -72,13 +69,7 @@ class GenerationEvaluator:
         return self._orchestrator
 
     def evaluate(self, analysis_result: dict, report: str, query: str) -> dict:
-        # Reuses the exact same context-building the report was actually
-        # generated from, rather than reformatting analysis_result a
-        # second, independent way -- the faithfulness check should judge
-        # against precisely what the report-writing LLM saw, not some
-        # other representation of the same data that might diverge from
-        # it. _build_prompt is "private" (leading underscore) but stable;
-        # reusing it beats re-deriving the same formatting logic twice.
+
         context = self.report_service._build_prompt(analysis_result)
 
         faithfulness_result = self.faithfulness_judge.check(context, report)
@@ -138,9 +129,7 @@ class GenerationEvaluator:
 
             report = final_output.get("report")
             if not report:
-                # A correct, expected outcome for a query that never
-                # triggered use_report -- not a generation failure, there
-                # was nothing to generate.
+          
                 results.append({**base, "failed": True, "reason": "no_report_in_output"})
                 continue
 

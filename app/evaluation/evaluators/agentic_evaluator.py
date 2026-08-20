@@ -24,11 +24,7 @@ logger = get_logger("evaluation.agentic")
 class AgenticEvaluator:
     def __init__(self) -> None:
         self.planning_agent = PlanningAgent()
-        # Lazy, same reasoning as GenerationEvaluator: LangGraphOrchestrator
-        # constructs ~19 agents (a real Qdrant connection among them).
-        # evaluate_routing() alone only needs planning_agent -- confirmed
-        # this was being paid for unnecessarily when a routing-only eval
-        # run showed Qdrant cleanup noise despite never touching retrieval.
+
         self._orchestrator = None
 
     @property

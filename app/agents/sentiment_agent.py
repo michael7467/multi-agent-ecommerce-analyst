@@ -18,15 +18,7 @@ _SENTIMENT_DF: pd.DataFrame | None = None  # shared across every SentimentAgent 
 
 
 def _load_sentiment_df() -> pd.DataFrame:
-    """Loads and indexes the sentiment table once per process, shared
-    across every consumer -- not just every SentimentAgent instance.
-
-    CompetitiveService constructs its own SentimentAgent rather than
-    sharing the orchestrator's, same as it does for DataAgent -- without
-    this, the same CSV gets read and parsed twice. See _load_features_df
-    in data_agent.py for the same pattern and the same not-thread-safe-
-    against-the-very-first-race caveat.
-    """
+  
     global _SENTIMENT_DF
     if _SENTIMENT_DF is None:
         try:
@@ -46,12 +38,7 @@ def _load_sentiment_df() -> pd.DataFrame:
 
 
 def _safe_float(value, default: float = 0.0) -> float:
-    # pd.isna() catches NaN and None correctly -- "value or default" does
-    # not: NaN is truthy in Python (bool(float("nan")) is True), so
-    # "value or default" returns the NaN right back instead of the
-    # default. Confirmed: a product with a genuinely missing sentiment
-    # score (e.g. zero reviews yet) was returning NaN for every field
-    # instead of the 0.0 this was clearly meant to guarantee.
+
     if pd.isna(value):
         return default
     try:

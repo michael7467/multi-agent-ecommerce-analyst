@@ -134,10 +134,7 @@ class BuyDecisionService:
         strong_positive = sum(label == "positive" for label in aspects)
         weak_or_negative = sum(label in {"negative", "mixed"} for label in aspects)
 
-        # Proportions, not hard-coded counts -- the original thresholds
-        # (>=2 of 4, >=3 of 4) were exactly half and exactly three-quarters.
-        # Expressing them that way means adding a 6th aspect later won't
-        # silently loosen the bar the way a missing 5th one just did.
+     
         if avg_sentiment >= 0.75 and strong_positive >= len(aspects) / 2:
             return "recommended"
         if avg_sentiment < 0.45 or weak_or_negative >= len(aspects) * 0.75:

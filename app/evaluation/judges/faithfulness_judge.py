@@ -130,9 +130,7 @@ class FaithfulnessJudge:
         try:
             raw = self.llm.generate_text(prompt)
         except Exception:
-            # Not cached -- same reasoning as the other judges in this
-            # project: an API failure is transient and should be retried
-            # next run, not frozen into a wrong answer.
+ 
             logger.error("Faithfulness LLM call failed", exc_info=True)
             return {"claims": [], "faithfulness": None, "hallucination_rate": None, "n_claims": 0, "error": "llm_call_failed"}
 

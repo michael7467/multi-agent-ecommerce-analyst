@@ -37,7 +37,7 @@ class TopicAgent(BaseAgent):
             if col not in self.topic_df.columns:
                 raise RuntimeError(f"TopicAgent: missing column '{col}' in topics table")
 
-        # remove BERTopic outlier topic
+   
         self.topic_df = self.topic_df[self.topic_df["topic_id"] != -1].copy()
         self.topic_df = self.topic_df.reset_index(drop=True)
 

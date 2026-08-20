@@ -6,14 +6,7 @@ from app.evaluation.runners.run_all_eval import run_all
 from app.evaluation.regression_check import find_regressions
 from app.evaluation.eval_history import save_eval_run, load_eval_history
 
-# Maps run_all()'s actual result keys to eval_history.py's real,
-# constrained evaluator_type values (exactly "retrieval", "agentic",
-# "visual", "generation" -- confirmed directly, not assumed). agent_eval
-# and report_eval are deliberately excluded, not silently mapped to a
-# made-up type: eval_history.py has no evaluator_type for either, so
-# there's nothing to persist or compare them against. If those two need
-# regression tracking later, that's a real schema change to
-# eval_history.py itself, not something to work around here.
+
 _RESULT_KEY_TO_EVALUATOR_TYPE = {
     "rag_eval": "retrieval",
     "generation_eval": "generation",
@@ -67,16 +60,10 @@ def run_ci_gate(
             if regressions:
                 all_regressions.extend(f"[{evaluator_type}] {r}" for r in regressions)
 
-        # Saved regardless of pass/fail, same reasoning as before -- this
-        # run becomes the next comparison's baseline either way.
-        # save_eval_run never raises (confirmed directly in
-        # eval_history.py), so a history-write failure can't take this
-        # script down.
+
         save_eval_run(evaluator_type=evaluator_type, summary=current_summary)
 
-    # agent_eval and report_eval are real parts of the result, still
-    # printed for visibility, just not persisted or regression-checked --
-    # no evaluator_type exists for either in the current schema.
+
     print("\n(agent_eval and report_eval are not regression-checked -- no matching evaluator_type in eval_history.py's current schema)")
     print(f"agent_eval: {current.get('agent_eval')}")
     print(f"report_eval: {current.get('report_eval')}")

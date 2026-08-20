@@ -13,10 +13,7 @@ logger = get_logger("api.request")
 
 
 def safe_trace_id() -> str | None:
-    """
-    Safely extract the current OpenTelemetry trace ID.
-    Returns None if no valid trace is active.
-    """
+    
     span = get_current_span()
     if not span:
         return None

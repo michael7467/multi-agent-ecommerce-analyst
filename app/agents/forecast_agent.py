@@ -36,14 +36,7 @@ class ForecastAgent(BaseAgent):
                 )
 
             if math.isnan(value):
-                # Field presence alone doesn't catch this: a NaN feature
-                # value (e.g. from DataAgent's source CSV having a genuine
-                # gap for this product) still passes "key in product_data",
-                # since the key IS there, just with a NaN value. float(nan)
-                # doesn't raise either, so this would otherwise reach the
-                # model as a silent NaN input with unknown behavior --
-                # nothing in PricePredictor.predict() imputes or rejects it
-                # explicitly.
+       
                 raise ValueError(f"ForecastAgent: field '{key}' is NaN")
 
             model_input[key] = value

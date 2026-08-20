@@ -100,13 +100,7 @@ Return JSON with exactly these keys and boolean values:
 
     @staticmethod
     def _contains_any(text: str, terms: list[str]) -> bool:
-        """Word-boundary term matching, not raw substring containment.
-
-        Plain `term in text` false-positives on short terms hiding inside
-        unrelated words -- e.g. "fit" matches inside "benefit", so a query
-        about the *benefit* of a product would incorrectly trigger
-        aspect-sentiment analysis meant for physical *fit*.
-        """
+      
         return any(
             re.search(r"\b" + re.escape(term) + r"\b", text) for term in terms
         )
@@ -130,19 +124,7 @@ Return JSON with exactly these keys and boolean values:
 
         return normalized
 
-    # Each rule is (terms, flags_to_set). If any term matches the query,
-    # every flag in `flags_to_set` is set True on the plan. Rules only ever
-    # add flags -- order doesn't affect the result, since it's a monotonic
-    # OR over independent booleans, not a series of overrides.
-    #
-    # A few terms deliberately appear in more than one rule's list because
-    # they're genuinely ambiguous (e.g. "worth"/"value" span both aspect
-    # framing and pricing framing). That's intentional, not copy-paste
-    # drift -- but keeping every rule's terms in one table, instead of
-    # scattered across 12 local variables, means an overlap like this is
-    # something you can actually see, instead of something you'd only find
-    # by manually diffing lists (which is how the previous review of this
-    # file caught it).
+ 
     _RULES: list[tuple[list[str], dict[str, bool]]] = [
         (
             [
@@ -241,9 +223,7 @@ Return JSON with exactly these keys and boolean values:
         ),
     ]
 
-    # Parallel to _RULES, same order, same length -- one short label per
-    # rule for query_type_total, kept separate rather than restructuring
-    # the existing (terms, flags) tuples above.
+ 
     _RULE_LABELS: list[str] = [
         "trend", "buy_decision", "competitive", "counterfactual", "topics",
         "opinion", "aspect", "pricing", "similar_products", "visual",

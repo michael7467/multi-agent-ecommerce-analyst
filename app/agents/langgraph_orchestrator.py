@@ -151,9 +151,6 @@ class LangGraphOrchestrator:
         self.cache_service = CacheService()
         self.graph = self._build_graph().compile()
 
-    # -------------------------
-    # Nodes -- setup
-    # -------------------------
     def _memory_node(self, state: AnalysisState) -> dict:
         result = _safe_agent_node(
             "memory_agent", self.memory_agent.run, critical=True, product_id=state["product_id"]
@@ -166,10 +163,7 @@ class LangGraphOrchestrator:
         )
         return {"plan": result["plan"]}
 
-    # -------------------------
-    # Nodes -- true-parallel group (10 total: no dependency on data_agent
-    # or on each other, all fire immediately after planning)
-    # -------------------------
+
     def _data_node(self, state: AnalysisState) -> dict:
         result = _safe_agent_node(
             "data_agent", self.data_agent.run, critical=False, product_id=state["product_id"]
@@ -261,9 +255,7 @@ class LangGraphOrchestrator:
             return result
         return {"aspect_summaries": result.get("aspect_summaries")}
 
-    # -------------------------
-    # Nodes -- data-dependent group (3 total: sequenced after data_agent)
-    # -------------------------
+ 
     def _forecast_node(self, state: AnalysisState) -> dict:
   
         product_data = state.get("product_data")
@@ -310,9 +302,7 @@ class LangGraphOrchestrator:
             return result
         return {"buy_decision": result.get("buy_decision")}
 
-    # -------------------------
-    # Nodes -- convergence
-    # -------------------------
+
     def _report_node(self, state: AnalysisState) -> dict:
         analysis_result = {
             k: v for k, v in state.items() if k not in ("plan", "failed_steps")
@@ -324,12 +314,7 @@ class LangGraphOrchestrator:
             return result
         return {"report": result.get("report")}
 
-    # -------------------------
-    # Nodes -- sequential-after-report (new shape: both always get
-    # invoked via plain edges, not a conditional router, since each
-    # internally no-ops when its own preconditions aren't met -- see the
-    # note in run() about why routing to END directly was avoided)
-    # -------------------------
+
     def _guardrail_node(self, state: AnalysisState) -> dict:
  
         plan = state.get("plan", {})
@@ -360,11 +345,7 @@ class LangGraphOrchestrator:
             return result
 
         critic_scores = result.get("critic_scores")
-        # Live signal, not the offline FaithfulnessJudge check -- zero
-        # extra cost, reuses the score critic_agent already computed.
-        # Only observed when the score actually parsed; a None here means
-        # the LLM didn't follow critic_agent's requested format, not that
-        # hallucination is 0.
+
         if critic_scores:
             rate = hallucination_rate_from_critic_scores(critic_scores)
             if rate is not None:
@@ -373,12 +354,7 @@ class LangGraphOrchestrator:
         return {"critic_report": result.get("critic_report"), "critic_scores": critic_scores}
 
     def _pii_guardrail_node(self, state: AnalysisState) -> dict:
-        # Deliberately no plan.get("use_x") gate, unlike guardrail/critic
-        # above -- a safety guardrail protecting against PII leakage
-        # shouldn't be something the planning agent's own routing
-        # decision can skip. The only real precondition is "is there
-        # something to scan" -- if report never got produced, there's
-        # nothing here to protect.
+   
         if "report" not in state:
             return {}
 
@@ -389,11 +365,7 @@ class LangGraphOrchestrator:
         if "failed_steps" in result:
             return result
 
-        # result is already {} when nothing was found/redacted (matches
-        # guardrail_agent/critic_agent's own silent-no-op pattern) --
-        # returned as-is rather than reshaped, since its keys (report,
-        # evidence, pii_detected) are already exactly the state fields
-        # that need updating.
+
         return result
 
     # -------------------------
@@ -403,8 +375,6 @@ class LangGraphOrchestrator:
         plan = state["plan"]
         targets = []
 
-        # 10-wide true-parallel group: independent of data_agent and of
-        # each other, gated only by their own plan flag.
         if plan.get("use_sentiment"):
             targets.append("sentiment_agent")
         if plan.get("use_topics"):
@@ -452,9 +422,7 @@ class LangGraphOrchestrator:
             targets.append("report_agent")
         return targets
 
-    # -------------------------
-    # Graph construction
-    # -------------------------
+ 
     def _build_graph(self) -> StateGraph:
         graph = StateGraph(AnalysisState)
 
@@ -483,7 +451,6 @@ class LangGraphOrchestrator:
         graph.add_conditional_edges("planning", self._route_after_planning)
         graph.add_conditional_edges("data_agent", self._route_after_data)
 
-        # Every true-parallel and data-dependent node converges on report.
         for node_name in (
             "sentiment_agent", "topic_agent", "competitive_agent", "trend_agent",
             "aspect_sentiment_agent", "retrieval_agent", "recommender_agent",
@@ -492,16 +459,6 @@ class LangGraphOrchestrator:
         ):
             graph.add_edge(node_name, "report_agent")
 
-        # Plain, unconditional edges rather than a conditional router --
-        # both nodes always get invoked, and each internally no-ops when
-        # its own plan flag or state preconditions aren't met. Verified
-        # deliberately: a conditional router returning [END] directly
-        # (for "neither requested") makes graph.invoke() return None
-        # instead of the accumulated state, which would crash
-        # result.get("plan") in run() below. Plain edges never hit that
-        # path, since the real run() always seeds a non-empty initial
-        # state (product_id/query/top_k/failed_steps), so the result is
-        # never None even when both nodes no-op.
         graph.add_edge("report_agent", "guardrail_agent")
         graph.add_edge("report_agent", "critic_agent")
         graph.add_edge("report_agent", "pii_guardrail_agent")
@@ -525,9 +482,7 @@ class LangGraphOrchestrator:
                     )
 
                     try:
-                        # -------------------------
-                        # Cache lookup
-                        # -------------------------
+                   
                         cache_payload = {"product_id": product_id, "query": query, "top_k": top_k}
 
                         cached = self.cache_service.get_json("analysis:full", cache_payload)
@@ -538,9 +493,7 @@ class LangGraphOrchestrator:
 
                         CACHE_MISSES_TOTAL.labels(cache_name="analysis_cache").inc()
 
-                        # -------------------------
-                        # Run the graph
-                        # -------------------------
+                    
                         result = self.graph.invoke(
                             {"product_id": product_id, "query": query, "top_k": top_k, "failed_steps": []}
                         )

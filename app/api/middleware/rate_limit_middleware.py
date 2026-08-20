@@ -20,7 +20,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
 
-        # Skip health + metrics + CORS preflight
+
         if (
             path.startswith("/health")
             or path == "/metrics"
@@ -28,21 +28,20 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         ):
             return await call_next(request)
 
-        # Identify client (prefer API key over IP)
+
         api_key = request.headers.get("X-API-Key")
         client_id = api_key if api_key else request.client.host
 
-        # Per-route overrides (optional)
+
         route_limit = settings.rate_limit_overrides.get(path)
         limit = route_limit or settings.rate_limit_per_minute
 
         key = f"rate_limit:{client_id}"
 
         try:
-            # Increment request count atomically
+         
             current = redis.incr(key)
 
-            # Set TTL only on first increment
             if current == 1:
                 redis.expire(key, 60)
 
@@ -70,7 +69,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 )
 
         except RedisError as e:
-            # Fail open: allow traffic if Redis is down
+        
             logger.error("Redis unavailable for rate limiting", extra={"error": str(e)})
             return await call_next(request)
 

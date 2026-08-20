@@ -18,11 +18,7 @@ class SummarizationService:
 
         evidence_text = []
         for i, ev in enumerate(evidence, start=1):
-            # ev.get("score", 0):.4f directly would crash if score is ever
-            # anything but a real number (e.g. a string) -- confirmed:
-            # f"{'0.85':.4f}" raises ValueError. Coercing defensively since
-            # nothing here guarantees evidence's score field is already a
-            # clean float by the time it reaches this prompt.
+       
             try:
                 score_value = float(ev.get("score", 0.0))
             except (TypeError, ValueError):

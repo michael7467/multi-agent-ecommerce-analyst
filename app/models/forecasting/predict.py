@@ -5,13 +5,6 @@ import joblib
 import pandas as pd
 
 
-# Every other data path in this codebase goes through app.config.paths and
-# is env-overridable (FEATURES_PATH, SENTIMENT_FEATURES_PATH, etc.). These
-# two were the exception -- hardcoded relative paths, which only resolve
-# correctly if the process's current working directory happens to match,
-# and can't be pointed elsewhere without a code change. Making them
-# env-overridable here at minimum; the real fix is moving these into
-# app.config.paths alongside everything else for consistency.
 MODEL_PATH = os.environ.get(
     "PRICE_MODEL_PATH", "artifacts/models/price_class_model_with_text.joblib"
 )
@@ -22,16 +15,7 @@ ENCODER_PATH = os.environ.get(
 
 class PricePredictor:
     def __init__(self):
-        # joblib.load() raises a bare FileNotFoundError/UnpicklingError with
-        # no context otherwise -- and since this runs at construction time,
-        # inside ForecastAgent.__init__(), inside the orchestrator's own
-        # __init__, a missing or corrupted model file currently takes down
-        # the entire app at startup, not just the forecast feature. Not
-        # changing that fail-fast-at-startup behavior here -- that's a real
-        # design decision (fail loud at deploy time vs. lazy-load and
-        # degrade gracefully like the rest of the pipeline now does) that's
-        # bigger than this file and worth deciding deliberately, not by
-        # default. This just makes the failure diagnosable when it happens.
+
         try:
             self.model = joblib.load(MODEL_PATH)
             self.encoder = joblib.load(ENCODER_PATH)

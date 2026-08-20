@@ -146,15 +146,7 @@ class ReportService:
 
             report = self.llm.generate_text(prompt)
 
-            # Alignment check, using the same synonym/contradiction-aware
-            # logic as GuardrailAgent instead of a separate, cruder
-            # substring check that used to live here independently. Only
-            # gates on an actual contradiction ("failed"), not mere
-            # silence ("uncertain") -- a report that simply doesn't repeat
-            # the price tier back isn't necessarily wrong, and discarding
-            # an otherwise-good, evidence-based report for a generic
-            # canned message every time that happens is a worse outcome
-            # for whoever reads it than letting it through.
+         
             if predicted_class is not None:
                 alignment = check_class_alignment(str(predicted_class), report)
                 if alignment["status"] == "failed":

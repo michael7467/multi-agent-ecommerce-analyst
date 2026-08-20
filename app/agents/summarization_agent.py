@@ -27,13 +27,7 @@ class SummarizationAgent(BaseAgent):
 
         aspect_summaries = {}
         for aspect, evidence in aspect_evidence.items():
-            # Each aspect is its own LLM call. Previously, one failing
-            # aspect (rate limit, transient error, malformed response)
-            # discarded every summary already produced in this loop -- the
-            # same all-or-nothing pattern the orchestrator's
-            # critical/non-critical split exists to avoid, just recurring
-            # here at the level of a single agent's internal loop instead
-            # of across agents.
+
             try:
                 summary = self.summarization_service.summarize_aspect(
                     product_id=product_id,
@@ -49,11 +43,7 @@ class SummarizationAgent(BaseAgent):
                     f"{self.name}: failed to summarize aspect '{aspect}'",
                     exc_info=True,
                 )
-                # Marked distinctly rather than omitted -- summarize_aspect
-                # already returns a real, plain-text "no evidence found"
-                # message for the genuinely-no-evidence case, so a missing
-                # or None summary here needs to read differently from
-                # that, not look like the same thing.
+
                 aspect_summaries[aspect] = {
                     "summary": None,
                     "evidence": evidence,

@@ -63,11 +63,7 @@ class VisionRelevanceJudge:
 
     @staticmethod
     def _cache_key(query: str, image_url: str) -> str:
-        # Keyed on the URL, not image bytes -- if the same URL could ever
-        # point at different image content over time for this catalog,
-        # this cache would go stale. Not a risk this project's static
-        # product images are expected to have, but worth knowing if that
-        # assumption changes.
+       
         raw = f"{query}||{image_url}"
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
@@ -85,11 +81,7 @@ class VisionRelevanceJudge:
         try:
             raw = self.llm.generate_text_with_image(prompt, image_url)
         except Exception:
-            # Not cached -- same reasoning as LLMRelevanceJudge: an API
-            # failure is transient and should be retried next run, not
-            # frozen into a permanent wrong answer. Vision calls are more
-            # expensive and slower than text-only ones, which makes this
-            # distinction matter even more here, not less.
+ 
             logger.error(f"Vision LLM call failed for query={query!r}, image_url={image_url!r}", exc_info=True)
             return False
 

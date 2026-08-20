@@ -17,11 +17,7 @@ def run_all(
     expected_true: list[str] | None = None,
 ) -> dict:
 
-    # Evaluates the actual, live orchestrator now -- was importing and
-    # running DynamicOrchestrator directly, the orchestrator this session
-    # retired from production in favor of LangGraphOrchestrator. As
-    # written before, this script validated a system no longer actually
-    # deployed.
+
     orchestrator = LangGraphOrchestrator()
     orchestrator_result = orchestrator.run(product_id=product_id, query=query, top_k=top_k)
     final_output = orchestrator_result["final_output"]

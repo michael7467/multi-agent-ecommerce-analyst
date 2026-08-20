@@ -77,14 +77,7 @@ class CounterfactualService:
     # Direction labeling
     # -----------------------------
     def _direction_label(self, original_class: str, new_class: str) -> str:
-        """Reconstructed -- called at line 119 but never defined anywhere
-        in this file, confirmed against the original uploaded archive too,
-        not just this paste. CLASS_ORDER is defined at the top of this
-        class and used nowhere else, which is exactly what this method
-        would need it for, so this is a high-confidence reconstruction of
-        intent, not a guess pulled from nothing -- but verify it matches
-        what you actually meant by "upgrade"/"downgrade".
-        """
+       
         try:
             original_idx = self.CLASS_ORDER.index(original_class)
             new_idx = self.CLASS_ORDER.index(new_class)
@@ -101,23 +94,7 @@ class CounterfactualService:
     # Candidate generation
     # -----------------------------
     def _generate_candidate_changes(self, original_class: str) -> list[tuple[str, list[float]]]:
-        """Reconstructed -- called at line 84, also never defined, also
-        confirmed missing from the original archive. This one I have much
-        lower confidence in than _direction_label: I don't know your real
-        feature distributions, so these delta magnitudes are a reasonable
-        starting guess, not a calibrated one. Review them against your
-        actual data before trusting the output.
-
-        Deltas are ordered smallest-magnitude first per feature, since
-        _search_counterfactuals breaks on the first delta that flips the
-        class -- smallest-first means it reports the smallest change that
-        works, which is the more interpretable answer ("a small change in
-        X would flip this") rather than an arbitrary larger one.
-
-        original_class steers direction: if already "high", there's
-        nothing higher to search for, so only decreases are tried (and
-        vice versa for "low"); "mid" tries both.
-        """
+      
         increase_only = {"low"}
         decrease_only = {"high"}
 
